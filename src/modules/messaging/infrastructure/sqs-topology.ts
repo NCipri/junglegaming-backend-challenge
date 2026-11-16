@@ -41,9 +41,13 @@ async function queueArn(client: SQSClient, queueUrl: string): Promise<string> {
   return arn;
 }
 
-export async function ensureQueues(client: SQSClient): Promise<QueueUrls> {
-  const dlqUrl = await createQueue(client, 'wager-transactions-dlq.fifo');
-  const wagerUrl = await createQueue(client, 'wager-transactions.fifo');
+export async function ensureQueues(
+  client: SQSClient,
+  opts: { prefix?: string; maxReceiveCount?: number } = {},
+): Promise<QueueUrls> {
+  const prefix = opts.prefix ?? '';
+  const dlqUrl = await createQueue(client, `${prefix}wager-transactions-dlq.fifo`);
+  const wagerUrl = await createQueue(client, `${prefix}wager-transactions.fifo`);
 
   await client.send(
     new SetQueueAttributesCommand({
@@ -51,12 +55,12 @@ export async function ensureQueues(client: SQSClient): Promise<QueueUrls> {
       Attributes: {
         RedrivePolicy: JSON.stringify({
           deadLetterTargetArn: await queueArn(client, dlqUrl),
-          maxReceiveCount: String(MAX_RECEIVE_COUNT),
+          maxReceiveCount: String(opts.maxReceiveCount ?? MAX_RECEIVE_COUNT),
         }),
       },
     }),
   );
-  const eventsUrl = await createQueue(client, 'wallet-events.fifo');
+  const eventsUrl = await createQueue(client, `${prefix}wallet-events.fifo`);
 
   return { wagerUrl, dlqUrl, eventsUrl };
 }

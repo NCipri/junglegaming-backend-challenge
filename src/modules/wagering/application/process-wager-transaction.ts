@@ -29,7 +29,11 @@ export class ProcessWagerTransaction {
     private readonly faults: FaultInjector,
   ) {}
 
-  async execute(cmd: WagerCommand, channel: WagerChannel): Promise<WagerResult> {
+  async execute(
+    cmd: WagerCommand,
+    channel: WagerChannel,
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<WagerResult> {
     const startedAt = performance.now();
     const payloadHash = computeWagerPayloadHash({
       ...cmd,
@@ -50,9 +54,12 @@ export class ProcessWagerTransaction {
         }
       }
 
-      return await this.runner.run((tx) => this.unit(tx, cmd, channel, payloadHash, build));
+      return await this.runner.run(
+        (tx) => this.unit(tx, cmd, channel, payloadHash, build),
+        opts.signal ? { signal: opts.signal } : {},
+      );
     } catch (error) {
-      if (classifyError(error).kind !== 'DETERMINISTIC') {
+      if (opts.signal?.aborted || classifyError(error).kind !== 'DETERMINISTIC') {
         throw error;
       }
 

@@ -14,11 +14,14 @@ export function testSqsClient(endpoint: string): SQSClient {
   });
 }
 
-export async function createTestQueues(endpoint: string): Promise<QueueUrls> {
+export async function createTestQueues(
+  endpoint: string,
+  opts: { prefix?: string; maxReceiveCount?: number } = {},
+): Promise<QueueUrls> {
   const client = testSqsClient(endpoint);
 
   try {
-    return await ensureQueues(client);
+    return await ensureQueues(client, opts);
   } finally {
     client.destroy();
   }
