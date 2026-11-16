@@ -87,3 +87,17 @@ export function newWager(
     ...overrides,
   });
 }
+
+export interface StartGate {
+  wait(): Promise<void>;
+  release(): void;
+}
+
+export function startGate(): StartGate {
+  let open: () => void = () => undefined;
+  const opened = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+
+  return { wait: () => opened, release: () => open() };
+}
