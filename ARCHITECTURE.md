@@ -318,6 +318,7 @@ Saldo insuficiente numa aposta e reversão que estouraria o saldo têm códigos 
 
 - **Logs** JSON (pino) com `correlationId`, `messageId`, `transactionId`, `walletId`, `providerId`, tipo, status, `failureCode` e duração; uma linha por requisição HTTP e por comando processado. **Redação automática** de valores, saldos, `playerId`, tokens e corpos — mesmo se logados por engano (testado).
 - **Métricas Prometheus** numa porta interna (9464), separada da API. Cobrem o que o desafio pede (transações por status, duplicatas, retries, DLQ, conflitos de lock, outbox lag, latência) e o "por que está lento" sem tracing: espera pelo lock da wallet, duração de cada transação, duração de cada publicação. `dlq_depth` é lido da própria DLQ a cada 15 s (conta também o que o SQS move sozinho). Métricas nunca somam dinheiro.
+- **Dashboard:** Prometheus (coleta das 3 instâncias a cada 5 s) e Grafana com um painel provisionado, que sobem com o Compose.
 - **Health:** `/health/live` sem dependências; `/health/ready` com PostgreSQL e SQS (timeout de 3 s) e 503 durante o desligamento.
 - **Correlação:** `X-Correlation-Id` (aceito do cliente ou gerado) e `X-Instance-Id` em toda resposta; o `correlationId` segue nos eventos publicados.
 

@@ -318,6 +318,7 @@ Insufficient balance on a bet and a reversal that would overdraw have **distinct
 
 - **Logs**: JSON (pino) with `correlationId`, `messageId`, `transactionId`, `walletId`, `providerId`, kind, status, `failureCode` and duration; one line per HTTP request and per processed command. **Automatic redaction** of amounts, balances, `playerId`, tokens and bodies — even if logged by mistake (tested).
 - **Prometheus metrics** on an internal port (9464), separate from the API. They cover what the challenge asks (transactions by status, duplicates, retries, DLQ, lock conflicts, outbox lag, latency) and the "why is it slow" question without tracing: wait for the wallet lock, duration of each transaction, duration of each publication. `dlq_depth` is read from the DLQ itself every 15 s (also counting what SQS moves on its own). Metrics never sum money.
+- **Dashboard:** Prometheus (scraping the 3 instances every 5 s) and Grafana with a provisioned dashboard, started by Compose.
 - **Health:** `/health/live` with no dependencies; `/health/ready` with PostgreSQL and SQS (3 s timeout) and 503 while shutting down.
 - **Correlation:** `X-Correlation-Id` (accepted from the client or generated) and `X-Instance-Id` on every response; the `correlationId` is carried into published events.
 

@@ -30,7 +30,7 @@ Serviço financeiro de apostas: wallets com ledger auditável, transações `BET
 
 - **Docker** com Docker Compose v2.
 - **Bun 1.4.4** (`curl -fsSL https://bun.sh/install | bash -s bun-v1.4.4`) — necessário para os testes, os scripts e para obter tokens.
-- Portas livres no host: `8080` (API via nginx), `8081` (Keycloak), `55432` (PostgreSQL), `4566` (SQS).
+- Portas livres no host: `8080` (API via nginx), `8081` (Keycloak), `55432` (PostgreSQL), `4566` (SQS), `9090` (Prometheus), `3001` (Grafana).
 
 ```bash
 bun install
@@ -56,6 +56,8 @@ O Compose sobe, nesta ordem:
 | `keycloak`                | Provedor de identidade com o realm `wagering` importado                                                                  | `8081`        |
 | `app-1`, `app-2`, `app-3` | Três instâncias da aplicação, cada uma com **todos os papéis**: API, consumer SQS, relay da outbox e worker de pendentes | —             |
 | `nginx`                   | Porta única da API, round-robin entre as três instâncias                                                                 | `8080`        |
+| `prometheus`              | Coleta as métricas das três instâncias a cada 5 s                                                                        | `9090`        |
+| `grafana`                 | Dashboard pronto ("Wagering processor"), acesso anônimo de leitura                                                       | `3001`        |
 
 Toda resposta traz `X-Instance-Id` (qual instância atendeu) e `X-Correlation-Id`:
 
@@ -235,6 +237,7 @@ Os `failureCode` possíveis estão em [`ARCHITECTURE.md`](ARCHITECTURE.md#9-taxo
 
   Principais: `wager_transactions_total{status,kind}`, `idempotent_replays_total`, `idempotency_conflicts_total`, `inbox_duplicates_total`, `processing_retries_total{reason}`, `dlq_messages_total{reason}`, `dlq_depth`, `lock_conflicts_total`, `db_deadlocks_total`, `outbox_lag_seconds`, `processing_duration_seconds{channel}`, `wallet_lock_wait_seconds`, `db_transaction_duration_seconds`, `reconciliation_divergence_total`.
 
+- **Dashboard:** abra `http://localhost:3001` (Grafana, sem login). O painel "Wagering processor" mostra transações por status e tipo, duplicatas e conflitos, latência p50/p95/p99, espera pelo lock da wallet, retries, conflitos de lock e deadlocks, DLQ, atraso da outbox, divergências de reconciliação e instâncias no ar. O Prometheus fica em `http://localhost:9090`.
 - **Acessar uma instância específica:** as instâncias não publicam portas; use `docker compose exec app-2 …` (como acima) ou observe `X-Instance-Id` nas respostas do nginx.
 - **nginx:** o balanceamento é round-robin. O nginx open source **não** consulta o readiness: uma instância é retirada de forma passiva depois de falhas de conexão (`max_fails=2`, `fail_timeout=10s`), e POSTs não são reenviados a outra instância.
 - **Desligamento (`SIGTERM`):** readiness passa a `503`; em paralelo, o consumer termina as mensagens em andamento e as requisições HTTP em andamento terminam (o listener continua aceitando durante a drenagem). Uma mensagem SQS que passar de 20 s tem a transação cancelada (rollback) e volta à fila; depois fecham o listener e o pool e o processo sai com código 0, dentro dos 30 s do `stop_grace_period`.

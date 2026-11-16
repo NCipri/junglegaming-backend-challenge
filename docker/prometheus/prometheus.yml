@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: wagering
+    static_configs:
+      - targets: ['app-1:9464', 'app-2:9464', 'app-3:9464']
