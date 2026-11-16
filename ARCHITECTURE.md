@@ -84,7 +84,7 @@ As invariantes ficam **dentro das classes**, com estado privado e transições e
 
 - `PENDING` existe só em memória: a linha **nasce já no estado final** (o `CHECK` de status nem aceita `PENDING`).
 - `PROCESSED`, `REJECTED` e `FAILED` são terminais — garantido também por trigger, que ainda recusa mudar colunas imutáveis (provider, ids, key, hash, wallet, player, rodada, jogo, tipo, valor, moeda).
-- Transações e wallets **nunca são apagadas** (trigger, inclusive para o dono do schema), e a identidade da wallet (`id`, `player_id`, `currency`, `created_at`) é imutável.
+- Transações e wallets **não podem ser apagadas**: um trigger recusa `DELETE` inclusive para o dono do schema, e o papel `app` não tem privilégio de `DELETE`, `TRUNCATE` nem de desligar triggers (só o dono, numa intervenção manual, conseguiria), e a identidade da wallet (`id`, `player_id`, `currency`, `created_at`) é imutável.
 
 ### `WalletLedgerEntry`
 
@@ -343,6 +343,7 @@ Saldo insuficiente numa aposta e reversão que estouraria o saldo têm códigos 
 - **Ordem dos eventos é de melhor esforço:** sob falha, ou com vários relays em paralelo, um evento pode chegar depois dos seguintes da mesma wallet (seção 8). Um evento que o SQS rejeita para sempre fica em retry (teto de 5 min), visível em `outbox_lag_seconds` e `last_error`, sem bloquear os demais.
 - **Envio à DLQ não é atômico com o commit:** se o processo cair entre o commit de um `FAILED` (ou de um conflito) e o envio à DLQ, a nova entrega é reconhecida pela inbox e confirmada; a transação `FAILED` e seu evento continuam gravados e auditáveis — só o sinal na DLQ se perde.
 - **Sem limpeza de inbox e outbox:** as tabelas crescem; em produção, uma rotina removeria inbox antiga (além da janela de redrive) e outbox publicada (após o período de auditoria).
+- **Vazão da outbox sob carga sustentada:** no teste de carga (README, seção 11), o relay publicou ≈ 120 eventos/s contra ≈ 1.200 gerados; nada se perde, mas os eventos atrasam minutos. Melhorias naturais: `SendMessageBatch`, lotes maiores, mais paralelismo.
 - **Escala 2 fixa** para todas as moedas; moedas com 0 ou 3 casas exigiriam escala por moeda.
 - **Apostas grátis** (`BET 0.00`) e **reversão parcial** estão fora de escopo.
 - **nginx open source não consulta o readiness:** retira instâncias de forma passiva (`max_fails`/`fail_timeout`); durante um desligamento, continua enviando requisições, que são atendidas, mas podem alongar a drenagem até 20 s.

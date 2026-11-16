@@ -84,7 +84,7 @@ Invariants live **inside the classes**, with private state and explicit transiti
 
 - `PENDING` exists only in memory: the row is **born in its final state** (the status `CHECK` does not even accept `PENDING`).
 - `PROCESSED`, `REJECTED` and `FAILED` are terminal — also enforced by a trigger, which additionally refuses changes to immutable columns (provider, ids, key, hash, wallet, player, round, game, kind, amount, currency).
-- Transactions and wallets are **never deleted** (trigger, even for the schema owner), and a wallet's identity (`id`, `player_id`, `currency`, `created_at`) is immutable.
+- Transactions and wallets **cannot be deleted**: a trigger refuses `DELETE` even for the schema owner, and the `app` role has no `DELETE`, `TRUNCATE` or trigger-disabling privilege (only the owner, by a manual intervention, could), and a wallet's identity (`id`, `player_id`, `currency`, `created_at`) is immutable.
 
 ### `WalletLedgerEntry`
 
@@ -343,6 +343,7 @@ Insufficient balance on a bet and a reversal that would overdraw have **distinct
 - **Event order is best-effort:** under failure, or with several relays in parallel, an event may arrive after later events of the same wallet (section 8). An event SQS rejects forever stays in retry (5 min cap), visible in `outbox_lag_seconds` and `last_error`, without blocking the others.
 - **Sending to the DLQ is not atomic with the commit:** if the process dies between committing a `FAILED` (or a conflict) and sending to the DLQ, the redelivery is recognised by the inbox and acknowledged; the `FAILED` transaction and its event remain stored and auditable — only the DLQ signal is lost.
 - **No inbox/outbox cleanup:** the tables grow; in production a job would delete old inbox rows (beyond the redrive window) and published outbox rows (after the audit period).
+- **Outbox throughput under sustained load:** in the load test (README, section 11) the relay published ≈ 120 events/s against ≈ 1,200 produced; nothing is lost, but events arrive minutes late. Natural improvements: `SendMessageBatch`, bigger batches, more parallelism.
 - **Fixed scale 2** for every currency; currencies with 0 or 3 decimals would need a per-currency scale.
 - **Free bets** (`BET 0.00`) and **partial reversals** are out of scope.
 - **Open-source nginx does not query readiness:** it removes instances passively (`max_fails`/`fail_timeout`); during a shutdown it keeps sending requests, which are served but can stretch the drain up to 20 s.

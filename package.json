@@ -22,7 +22,8 @@
     "publish:wager": "bun scripts/publish-wager-message.ts",
     "auth:token": "bun scripts/auth-token.ts",
     "start": "bun src/main.ts",
-    "test:coverage": "bun test tests/unit tests/integration --coverage --coverage-reporter=text --coverage-reporter=lcov && bun scripts/coverage-check.ts"
+    "test:coverage": "bun test tests/unit tests/integration --coverage --coverage-reporter=text --coverage-reporter=lcov && bun scripts/coverage-check.ts",
+    "test:load": "bun scripts/load-test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "3.1169.0",

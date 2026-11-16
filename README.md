@@ -21,8 +21,9 @@ Serviço financeiro de apostas: wallets com ledger auditável, transações `BET
 8. [Rodar a aplicação fora do Docker](#8-rodar-a-aplicação-fora-do-docker)
 9. [Testes](#9-testes)
 10. [Requisitos do desafio → testes que os provam](#10-requisitos-do-desafio--testes-que-os-provam)
-11. [Comandos](#11-comandos)
-12. [Estrutura do projeto](#12-estrutura-do-projeto)
+11. [Teste de carga](#11-teste-de-carga)
+12. [Comandos](#12-comandos)
+13. [Estrutura do projeto](#13-estrutura-do-projeto)
 
 ---
 
@@ -317,7 +318,34 @@ Ao fim de cada teste de integração e de concorrência, uma asserção confere 
 
 ---
 
-## 11. Comandos
+## 11. Teste de carga
+
+`bun run test:load` (com a stack do Compose no ar) mede a API real através do nginx e, no fim, reconcilia **todas** as wallets usadas. Parâmetros por variável de ambiente: `LOAD_DURATION_S` (60), `LOAD_CONCURRENCY` (32), `LOAD_WALLETS` (200), `LOAD_HOT_SHARE` (0.2 — fração das apostas numa única wallet, para forçar disputa de lock), `LOAD_REPLAY_SHARE` (0.1 — fração de replays idempotentes).
+
+**Resultado medido** (todos os serviços na mesma máquina: Intel i5-11400H, 12 CPUs lógicas, 15,4 GiB; 3 instâncias da app, nginx, PostgreSQL, MiniStack e Keycloak via Docker Compose; 60 s, 32 clientes, 200 wallets, 20% numa wallet quente, 10% de replays, cada requisição uma `BET` de 1,00):
+
+| Métrica                                 | Valor                                       |
+| --------------------------------------- | ------------------------------------------- |
+| Requisições                             | 35.884 em 60,1 s                            |
+| Vazão                                   | 597 req/s, todas respondidas com 200        |
+| Latência p50 / p95 / p99 / máx.         | 19,2 / 310,3 / 553,5 / 1.509,9 ms           |
+| Taxa de erro (5xx ou sem resposta)      | 0,00%                                       |
+| Replays enviados                        | 3.561                                       |
+| Conflitos de lock / deadlocks / retries | 0 / 0 / 0                                   |
+| Atraso máximo da outbox durante a carga | 97 s                                        |
+| Escoamento da outbox depois da carga    | 465 s para publicar todos os 65.046 eventos |
+| Reconciliação de todas as wallets       | 200 consistentes, 0 inconsistentes          |
+
+**Análise honesta:**
+
+- **Correção sob carga:** nenhum erro, nenhum deadlock, nenhum retry, e todas as wallets com saldo igual ao ledger.
+- **Latência:** p50 baixo; o p95/p99 alto vem da wallet quente — 20% das apostas disputam o mesmo lock e são processadas uma por vez (limitação conhecida do lock por wallet).
+- **Gargalo: a publicação da outbox.** Cada aposta gera 2 eventos (≈ 1.200 eventos/s), mas o relay publicou ≈ 120 eventos/s neste ambiente: ele envia um `SendMessage` por evento, em sequência dentro de cada wallet, e a wallet quente concentra 20% dos eventos. Nada se perde (a outbox é durável e o atraso aparece em `outbox_lag_seconds`), mas sob carga sustentada os eventos chegam com minutos de atraso. Melhorias naturais, não implementadas: `SendMessageBatch` (10 por chamada), lotes maiores e mais paralelismo por instância.
+- **Limites do experimento:** uma única máquina para tudo (o gerador de carga compete pela mesma CPU), MiniStack no lugar do SQS real, uma execução — os números indicam ordem de grandeza, não capacidade de produção.
+
+---
+
+## 12. Comandos
 
 | Comando                                                                         | O que faz                                          |
 | ------------------------------------------------------------------------------- | -------------------------------------------------- |
@@ -329,6 +357,7 @@ Ao fim de cada teste de integração e de concorrência, uma asserção confere 
 | `bun run auth:token <client>`                                                   | imprime um access token do Keycloak                |
 | `bun run lint` / `typecheck` / `format:check`                                   | qualidade de código                                |
 | `bun run test:unit` / `test:integration` / `test:concurrency` / `test:coverage` | testes                                             |
+| `bun run test:load`                                                             | teste de carga contra a stack no ar (seção 11)     |
 
 **Pre-commit** (lint, typecheck e testes unitários): `git config core.hooksPath .githooks`.
 
@@ -336,7 +365,7 @@ A CI (`.github/workflows/ci.yml`) roda lint, formatação, typecheck, unitários
 
 ---
 
-## 12. Estrutura do projeto
+## 13. Estrutura do projeto
 
 ```
 src/
