@@ -60,7 +60,9 @@ class ResourceCloser implements OnApplicationShutdown {
   }
 }
 
-class RoleRunner implements OnApplicationBootstrap, BeforeApplicationShutdown {
+export class RoleRunner implements OnApplicationBootstrap, BeforeApplicationShutdown {
+  private draining: Promise<void> | null = null;
+
   constructor(
     @Inject(APP_SETTINGS) private readonly config: AppConfig,
     @Inject(ShutdownState) private readonly state: ShutdownState,
@@ -85,7 +87,17 @@ class RoleRunner implements OnApplicationBootstrap, BeforeApplicationShutdown {
     }
   }
 
-  async beforeApplicationShutdown(): Promise<void> {
+  drain(): Promise<void> {
+    this.draining ??= this.stopRoles();
+
+    return this.draining;
+  }
+
+  beforeApplicationShutdown(): Promise<void> {
+    return this.drain();
+  }
+
+  private async stopRoles(): Promise<void> {
     this.state.begin();
     this.dlqDepth.stop();
     await Promise.all([

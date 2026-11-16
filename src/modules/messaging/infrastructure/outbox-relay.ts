@@ -1,4 +1,4 @@
-// Outbox relay: claims due events with a lease, publishes them outside any transaction, then marks or reschedules them.
+// Outbox relay: claims due events in commit order with a lease, publishes outside any transaction (sequential per wallet), marks or reschedules.
 import type { WalletTransactionRunner } from '../../../infrastructure/db/wallet-transaction-runner';
 import type { FaultInjector } from '../../../infrastructure/fault/fault-injector';
 import { computeBackoff } from '../../../shared/time/backoff';
@@ -42,19 +42,24 @@ export class OutboxRelay {
     if (claimed.length > 0) {
       await this.faults.hit('after-claim-before-publish');
     }
-    const groups = new Map<string, ClaimedOutboxMessage[]>();
+    const partitions = new Map<string, ClaimedOutboxMessage[]>();
 
     for (const message of claimed) {
-      groups.set(message.partitionKey, [...(groups.get(message.partitionKey) ?? []), message]);
+      partitions.set(message.partitionKey, [
+        ...(partitions.get(message.partitionKey) ?? []),
+        message,
+      ]);
     }
-    const published = await Promise.all(
-      [...groups.values()].map((group) => this.publishGroup(group, now)),
-    );
+    const published = (
+      await Promise.all(
+        [...partitions.values()].map((partition) => this.publishInOrder(partition, now)),
+      )
+    ).flat();
     const lag = await this.runner.read((tx) => tx.outbox.oldestPendingAgeSeconds(this.clock.now()));
 
     this.metrics.set('outbox_lag_seconds', lag);
 
-    return published.reduce((total, count) => total + count, 0);
+    return published.filter(Boolean).length;
   }
 
   start(): void {
@@ -98,37 +103,34 @@ export class OutboxRelay {
     }
   }
 
-  private async publishGroup(group: ClaimedOutboxMessage[], now: Date): Promise<number> {
-    let published = 0;
+  private async publishInOrder(partition: ClaimedOutboxMessage[], now: Date): Promise<boolean[]> {
+    const results: boolean[] = [];
 
-    for (const [index, message] of group.entries()) {
-      const startedAt = performance.now();
-
-      try {
-        await this.publisher.publish(message);
-      } catch (error) {
-        await this.reschedule(message, group.slice(index + 1), now, error);
-
-        return published;
-      }
-      this.metrics.observe(
-        'outbox_publish_duration_seconds',
-        (performance.now() - startedAt) / 1000,
-      );
-      await this.faults.hit('after-publish-before-mark');
-      await this.runner.read((tx) => tx.outbox.markPublished(message.id, this.clock.now()));
-      published += 1;
+    for (const message of partition) {
+      results.push(await this.publishOne(message, now));
     }
 
-    return published;
+    return results;
   }
 
-  private async reschedule(
-    failed: ClaimedOutboxMessage,
-    followers: ClaimedOutboxMessage[],
-    now: Date,
-    error: unknown,
-  ): Promise<void> {
+  private async publishOne(message: ClaimedOutboxMessage, now: Date): Promise<boolean> {
+    const startedAt = performance.now();
+
+    try {
+      await this.publisher.publish(message);
+    } catch (error) {
+      await this.reschedule(message, now, error);
+
+      return false;
+    }
+    this.metrics.observe('outbox_publish_duration_seconds', (performance.now() - startedAt) / 1000);
+    await this.faults.hit('after-publish-before-mark');
+    await this.runner.read((tx) => tx.outbox.markPublished(message.id, this.clock.now()));
+
+    return true;
+  }
+
+  private async reschedule(failed: ClaimedOutboxMessage, now: Date, error: unknown): Promise<void> {
     const delayMs = computeBackoff({
       attempts: failed.attempts,
       baseMs: this.settings.retryBaseMs,
@@ -147,17 +149,8 @@ export class OutboxRelay {
       },
       'Outbox publish failed; rescheduled',
     );
-    await this.runner.read(async (tx) => {
-      await tx.outbox.scheduleRetry(
-        failed.id,
-        nextAttemptAt,
-        failed.attempts + 1,
-        errorText(error),
-      );
-      await tx.outbox.deferUnpublished(
-        followers.map((message) => message.id),
-        nextAttemptAt,
-      );
-    });
+    await this.runner.read((tx) =>
+      tx.outbox.scheduleRetry(failed.id, nextAttemptAt, failed.attempts + 1, errorText(error)),
+    );
   }
 }

@@ -3,10 +3,12 @@ import { Migration20261115000001_initial_schema } from './Migration2026111500000
 import { Migration20261115000002_triggers } from './Migration20261115000002_triggers';
 import { Migration20261115000003_privileges } from './Migration20261115000003_privileges';
 import { Migration20261115000004_seed_providers } from './Migration20261115000004_seed_providers';
+import { Migration20261116000005_outbox_order } from './Migration20261116000005_outbox_order';
 
 export const migrationsList = [
   { name: 'Migration20261115000001_initial_schema', class: Migration20261115000001_initial_schema },
   { name: 'Migration20261115000002_triggers', class: Migration20261115000002_triggers },
   { name: 'Migration20261115000003_privileges', class: Migration20261115000003_privileges },
   { name: 'Migration20261115000004_seed_providers', class: Migration20261115000004_seed_providers },
+  { name: 'Migration20261116000005_outbox_order', class: Migration20261116000005_outbox_order },
 ];

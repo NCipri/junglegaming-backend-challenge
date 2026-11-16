@@ -229,3 +229,79 @@ describe('PendingReferenceWorker', () => {
     expect(await statusOf(h.app, 'provider-a', refund.externalTransactionId)).toBe('PROCESSED');
   });
 });
+
+describe('ResolvePendingReference — remaining paths', () => {
+  test('a reference still missing inside the TTL is rescheduled with backoff and one more attempt', async () => {
+    const clock = new FakeClock();
+    const app = createUseCases(h.t, { clock });
+    const wallet = await h.openWallet('100.00');
+    const refund = wagerCommand(wallet, {
+      kind: WagerKind.Refund,
+      referenceExternalTransactionId: 'later',
+    });
+    const { rows: before } = await h.db.query<{ id: string }>(
+      'SELECT id FROM wager_transactions WHERE external_transaction_id = $1',
+      [refund.externalTransactionId],
+    );
+
+    expect(before).toHaveLength(0);
+    await app.processWager.execute(refund, HTTP);
+    clock.advance(1000);
+    const { rows } = await h.db.query<{ id: string }>(
+      'SELECT id FROM wager_transactions WHERE external_transaction_id = $1',
+      [refund.externalTransactionId],
+    );
+    const id = rows[0]?.id ?? '';
+
+    expect(await app.resolvePending.execute(id, clock.now())).toBe('STILL_PENDING');
+    const { rows: after } = await h.db.query<{
+      attempts: number;
+      next_attempt_at: Date;
+      status: string;
+    }>('SELECT attempts, next_attempt_at, status FROM wager_transactions WHERE id = $1', [id]);
+
+    expect(after[0]?.status).toBe('PENDING_REFERENCE');
+    expect(after[0]?.attempts).toBe(1);
+    expect(after[0]?.next_attempt_at.getTime()).toBeGreaterThanOrEqual(clock.now().getTime() + 800);
+    expect(after[0]?.next_attempt_at.getTime()).toBeLessThanOrEqual(clock.now().getTime() + 1200);
+  });
+
+  test('a transaction that is not pending, or does not exist, is SKIPPED', async () => {
+    const wallet = await h.openWallet('100.00');
+    const bet = wagerCommand(wallet);
+    const result = await h.app.processWager.execute(bet, HTTP);
+
+    if (result.type !== 'RESULT') {
+      throw new Error('expected RESULT');
+    }
+    expect(await h.app.resolvePending.execute(result.view.transactionId)).toBe('SKIPPED');
+    expect(await h.app.resolvePending.execute(Bun.randomUUIDv7())).toBe('SKIPPED');
+  });
+
+  test('start and stop run the polling loop and resolve without explicit ticks', async () => {
+    const wallet = await h.openWallet('100.00');
+    const bet = wagerCommand(wallet, { money: { amount: '5.00', currency: 'BRL' } });
+    const refund = wagerCommand(wallet, {
+      kind: WagerKind.Refund,
+      money: { amount: '5.00', currency: 'BRL' },
+      referenceExternalTransactionId: bet.externalTransactionId,
+    });
+    const worker = h.app.pendingWorker('loop-worker', { pollMs: 50 });
+
+    await h.app.processWager.execute(refund, HTTP);
+    await h.app.processWager.execute(bet, HTTP);
+    worker.start();
+    worker.start();
+    try {
+      await waitUntil(
+        async () =>
+          (await statusOf(h.app, 'provider-a', refund.externalTransactionId)) === 'PROCESSED',
+        {
+          timeoutMs: 5000,
+        },
+      );
+    } finally {
+      await worker.stop();
+    }
+  });
+});

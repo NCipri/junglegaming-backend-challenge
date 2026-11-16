@@ -461,22 +461,24 @@ describe('InboxRepository', () => {
 });
 
 describe('OutboxRepository', () => {
-  test('claimDue returns the payload text exactly as stored, oldest first', async () => {
+  test('claimDue returns the payload text exactly as stored, in commit (insertion) order regardless of occurredAt', async () => {
     const walletId = uuid();
-    const older = outboxMessage(walletId, NOW);
-    const newer = outboxMessage(walletId, later(10));
+    const first = outboxMessage(walletId, later(10));
+    const second = outboxMessage(walletId, NOW);
+    const ctx = t.context();
 
-    await t.runner().run((tx) => tx.outbox.insertMany([newer, older]));
-    const claimed = await t.context().outbox.claimDue({
+    await t.runner().run((tx) => tx.outbox.insertMany([first]));
+    await t.runner().run((tx) => tx.outbox.insertMany([second]));
+    const claimed = await ctx.outbox.claimDue({
       instanceId: 'relay-1',
       limit: 10,
       leaseMs: 30_000,
       now: later(1000),
     });
 
-    expect(claimed.map((m) => m.id)).toEqual([older.id, newer.id]);
+    expect(claimed.map((m) => m.id)).toEqual([first.id, second.id]);
     expect(typeof claimed[0]?.payloadText).toBe('string');
-    expect(JSON.parse(claimed[0]?.payloadText ?? 'null')).toEqual(older.payload);
+    expect(JSON.parse(claimed[0]?.payloadText ?? 'null')).toEqual(first.payload);
     expect(claimed[0]).toMatchObject({
       partitionKey: walletId,
       eventType: 'WalletBalanceChanged',
@@ -535,40 +537,6 @@ describe('OutboxRepository', () => {
 
     expect(byId.get(published.id)?.published_at?.toISOString()).toBe(later(5).toISOString());
     expect(byId.get(retried.id)?.last_error?.length).toBe(1000);
-  });
-
-  test('deferUnpublished moves several unpublished messages without counting an attempt', async () => {
-    const messages = [
-      outboxMessage(uuid(), NOW),
-      outboxMessage(uuid(), NOW),
-      outboxMessage(uuid(), NOW),
-    ];
-    const ctx = t.context();
-
-    await t.runner().run((tx) => tx.outbox.insertMany(messages));
-    await ctx.outbox.claimDue({ instanceId: 'a', limit: 10, leaseMs: 30_000, now: NOW });
-    await ctx.outbox.markPublished(messages[2]?.id ?? '', NOW);
-    await ctx.outbox.deferUnpublished(
-      messages.map((m) => m.id),
-      later(9000),
-    );
-
-    expect(
-      await ctx.outbox.claimDue({ instanceId: 'b', limit: 10, leaseMs: 30_000, now: later(8999) }),
-    ).toEqual([]);
-    const due = await ctx.outbox.claimDue({
-      instanceId: 'b',
-      limit: 10,
-      leaseMs: 30_000,
-      now: later(9000),
-    });
-
-    expect(due.map((m) => `${m.id}:${m.attempts}`).sort()).toEqual(
-      messages
-        .slice(0, 2)
-        .map((m) => `${m.id}:0`)
-        .sort(),
-    );
   });
 
   test('oldestPendingAgeSeconds measures the oldest unpublished message', async () => {

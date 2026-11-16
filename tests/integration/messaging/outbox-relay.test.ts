@@ -23,7 +23,11 @@ import { OutboxMessage } from '../../../src/modules/messaging/domain/outbox-mess
 import { createSqsClient } from '../../../src/modules/messaging/infrastructure/sqs-client';
 import type { QueueUrls } from '../../../src/modules/messaging/infrastructure/sqs-topology';
 import { OutboxRelay } from '../../../src/modules/messaging/infrastructure/outbox-relay';
-import { SqsEventPublisher } from '../../../src/modules/messaging/infrastructure/sqs-event-publisher';
+import {
+  SqsEventPublisher,
+  type EventPublisher,
+} from '../../../src/modules/messaging/infrastructure/sqs-event-publisher';
+import type { ClaimedOutboxMessage } from '../../../src/modules/messaging/infrastructure/outbox.repository.types';
 import { NoopLogger } from '../../../src/modules/observability/logger.port';
 
 let pg: TestPostgres;
@@ -58,6 +62,13 @@ beforeEach(async () => {
   await purge(reader, queues.eventsUrl);
 });
 
+function wrapPublisher(
+  wrap: ((inner: EventPublisher) => EventPublisher) | undefined,
+  inner: EventPublisher,
+): EventPublisher {
+  return wrap ? wrap(inner) : inner;
+}
+
 function relay(
   instanceId: string,
   opts: {
@@ -65,6 +76,7 @@ function relay(
     leaseMs?: number;
     clock?: FakeClock;
     requestTimeoutMs?: number;
+    publisher?: (inner: EventPublisher) => EventPublisher;
   } = {},
 ) {
   const client = createSqsClient({
@@ -76,7 +88,7 @@ function relay(
 
   return new OutboxRelay(
     t.runner(),
-    new SqsEventPublisher(client, queues.eventsUrl),
+    wrapPublisher(opts.publisher, new SqsEventPublisher(client, queues.eventsUrl)),
     t.metrics,
     opts.clock ?? { now: () => new Date() },
     opts.faults ?? new NoopFaultInjector(),
@@ -124,7 +136,14 @@ describe('OutboxRelay', () => {
       'SELECT id, payload::text AS payload_text FROM outbox_messages ORDER BY occurred_at, id',
     );
 
-    expect(await relay('relay-1').tick()).toBe(4);
+    const r = relay('relay-1');
+    let published = 0;
+
+    for (let n = await r.tick(); n > 0; n = await r.tick()) {
+      published += n;
+    }
+
+    expect(published).toBe(4);
     const received = await receiveAll(reader, queues.eventsUrl, { waitMs: 5000, expected: 4 });
 
     expect(received.map((m) => m.body).sort()).toEqual(rows.map((row) => row.payload_text).sort());
@@ -232,19 +251,19 @@ describe('OutboxRelay', () => {
     }>(
       'SELECT attempts, next_attempt_at, last_error FROM outbox_messages ORDER BY occurred_at, id',
     );
-    const [first, ...rest] = rows;
 
     expect(rows.length).toBe(2);
-    expect(first?.attempts).toBe(1);
-    expect(first?.last_error).not.toBeNull();
-    expect(rest.every((row) => row.attempts === 0)).toBe(true);
-    expect(
-      rows.every((row) => row.next_attempt_at.getTime() === clock.now().getTime() + 1000),
-    ).toBe(true);
+    for (const row of rows) {
+      expect(row.attempts).toBe(1);
+      expect(row.last_error).not.toBeNull();
+      expect(row.next_attempt_at.getTime()).toBe(clock.now().getTime() + 1000);
+    }
     expect(t.metrics.counter('outbox_publish_retries_total')).toBeGreaterThanOrEqual(1);
     expect(await r.tick()).toBe(0);
     clock.advance(1000);
-    expect(await r.tick()).toBe(rows.length);
+    while ((await r.tick()) > 0) {
+      continue;
+    }
     expect(await pendingCount()).toBe(0);
   }, 60_000);
 
@@ -277,5 +296,53 @@ describe('OutboxRelay', () => {
 
     expect(t.metrics.gauge('outbox_lag_seconds')).toBeDefined();
     expect(t.metrics.allObservations('outbox_publish_duration_seconds').length).toBeGreaterThan(0);
+  });
+
+  test('events of one wallet leave in commit order, and a failing event does not hold the others back', async () => {
+    const walletId = uuid();
+    const ids: string[] = [];
+
+    for (let i = 0; i < 4; i++) {
+      const id = uuid();
+
+      ids.push(id);
+      await t.runner().run((tx) =>
+        tx.outbox.insertMany([
+          OutboxMessage.rehydrate({
+            id,
+            aggregateId: walletId,
+            partitionKey: walletId,
+            eventType: 'WalletBalanceChanged',
+            eventVersion: 1,
+            payload: { eventId: id, position: i },
+            occurredAt: new Date(Date.now() - i * 1000),
+            attempts: 0,
+            nextAttemptAt: new Date(Date.now() - 5000),
+            publishedAt: null,
+          }),
+        ]),
+      );
+    }
+    const poisoned = ids[1];
+    const flaky = (inner: EventPublisher): EventPublisher => ({
+      publish: async (message: ClaimedOutboxMessage) => {
+        if (message.id === poisoned) {
+          throw new Error('simulated rejection of one event');
+        }
+        await inner.publish(message);
+      },
+    });
+    const clock = new FakeClock();
+
+    expect(await relay('relay-a', { clock, publisher: flaky }).tick()).toBe(3);
+    const received = await receiveAll(reader, queues.eventsUrl, { waitMs: 5000, expected: 3 });
+
+    expect(received.map((m) => (JSON.parse(m.body) as { position: number }).position)).toEqual([
+      0, 2, 3,
+    ]);
+    expect(await pendingCount()).toBe(1);
+    clock.advance(1500);
+    expect(await relay('relay-b', { clock }).tick()).toBe(1);
+    expect(await pendingCount()).toBe(0);
   });
 });

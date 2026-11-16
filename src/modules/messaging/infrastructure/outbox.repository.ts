@@ -1,4 +1,4 @@
-// Outbox repository: inserts in the business transaction, lease-based claims with SKIP LOCKED and publish bookkeeping.
+// Outbox repository: inserts in the business transaction, leased claims in commit order (seq) with SKIP LOCKED and publish bookkeeping.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { OutboxMessage } from '../domain/outbox-message';
 import type { ClaimedOutboxMessage, ClaimOutboxParams } from './outbox.repository.types';
@@ -13,19 +13,19 @@ const CLAIM_SQL = `
   WITH claimed AS (
     UPDATE outbox_messages SET locked_until = ?, locked_by = ?
      WHERE id IN (
-       SELECT id FROM outbox_messages
-        WHERE published_at IS NULL AND next_attempt_at <= ?
-          AND (locked_until IS NULL OR locked_until < ?)
-        ORDER BY occurred_at, id
+       SELECT o.id FROM outbox_messages o
+        WHERE o.published_at IS NULL AND o.next_attempt_at <= ?
+          AND (o.locked_until IS NULL OR o.locked_until < ?)
+        ORDER BY o.seq
         LIMIT ?
         FOR UPDATE SKIP LOCKED
      )
-    RETURNING id, partition_key, event_type, event_version, payload::text AS payload_text, attempts, occurred_at
+    RETURNING id, partition_key, event_type, event_version, payload::text AS payload_text, attempts, seq
   )
   SELECT id, partition_key AS "partitionKey", event_type AS "eventType", event_version AS "eventVersion",
          payload_text AS "payloadText", attempts
     FROM claimed
-   ORDER BY occurred_at, id
+   ORDER BY seq
 `;
 
 const OLDEST_PENDING_SQL = `
@@ -93,18 +93,6 @@ export class OutboxRepository {
           SET attempts = ?, next_attempt_at = ?, last_error = ?, locked_until = NULL, locked_by = NULL
         WHERE id = ? AND published_at IS NULL`,
       [attempts, nextAttemptAt, error.slice(0, MAX_ERROR_LENGTH), id],
-      'run',
-    );
-  }
-
-  async deferUnpublished(ids: readonly string[], nextAttemptAt: Date): Promise<void> {
-    if (ids.length === 0) {
-      return;
-    }
-    await this.em.execute(
-      `UPDATE outbox_messages SET next_attempt_at = ?, locked_until = NULL, locked_by = NULL
-        WHERE id IN (?) AND published_at IS NULL`,
-      [nextAttemptAt, ids],
       'run',
     );
   }

@@ -1,3 +1,4 @@
 [test]
 preload = ["reflect-metadata"]
 timeout = 30000
+coverageSkipTestFiles = true

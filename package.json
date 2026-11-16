@@ -20,7 +20,9 @@
     "sqs:init": "bun scripts/sqs-init.ts",
     "dlq:redrive": "bun scripts/dlq-redrive.ts",
     "publish:wager": "bun scripts/publish-wager-message.ts",
-    "auth:token": "bun scripts/auth-token.ts"
+    "auth:token": "bun scripts/auth-token.ts",
+    "start": "bun src/main.ts",
+    "test:coverage": "bun test tests/unit tests/integration --coverage --coverage-reporter=text --coverage-reporter=lcov && bun scripts/coverage-check.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "3.1169.0",
