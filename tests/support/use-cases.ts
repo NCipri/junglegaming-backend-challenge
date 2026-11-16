@@ -10,6 +10,8 @@ import { GetTransaction } from '../../src/modules/wagering/application/get-trans
 import { ProcessWagerTransaction } from '../../src/modules/wagering/application/process-wager-transaction';
 import type { WagerCommand } from '../../src/modules/wagering/application/wager-command';
 import { WagerProcessor } from '../../src/modules/wagering/application/wager-processor';
+import { PendingReferenceWorker } from '../../src/modules/wagering/application/pending-reference.worker';
+import { ResolvePendingReference } from '../../src/modules/wagering/application/resolve-pending-reference';
 import { WagerKind } from '../../src/modules/wagering/domain/wager-kind';
 import { GetWallet } from '../../src/modules/wallet/application/get-wallet';
 import { ListLedger } from '../../src/modules/wallet/application/list-ledger';
@@ -50,6 +52,11 @@ export interface UseCases {
   listLedger: ListLedger;
   reconcile: ReconcileWallet;
   getTransaction: GetTransaction;
+  resolvePending: ResolvePendingReference;
+  pendingWorker(
+    instanceId: string,
+    opts?: { leaseMs?: number; pollMs?: number },
+  ): PendingReferenceWorker;
   logger: RecordingLogger;
 }
 
@@ -68,6 +75,11 @@ export function createUseCases(
     pendingFirstRetryMs: 1000,
   });
 
+  const resolvePending = new ResolvePendingReference(runner, processor, clock, {
+    retryBaseMs: 1000,
+    retryCapMs: 300_000,
+  });
+
   return {
     openWallet: new OpenWallet(runner, events, ids, clock),
     processWager: new ProcessWagerTransaction(
@@ -83,6 +95,15 @@ export function createUseCases(
     listLedger: new ListLedger(runner),
     reconcile: new ReconcileWallet(runner, t.metrics, logger),
     getTransaction: new GetTransaction(runner),
+    resolvePending,
+    pendingWorker: (instanceId, workerOpts = {}) =>
+      new PendingReferenceWorker(runner, resolvePending, clock, logger, {
+        instanceId,
+        leaseMs: workerOpts.leaseMs ?? 30_000,
+        pollMs: workerOpts.pollMs ?? 50,
+        batchSize: 50,
+        concurrency: 4,
+      }),
     logger,
   };
 }

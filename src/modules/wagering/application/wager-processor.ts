@@ -98,6 +98,35 @@ export class WagerProcessor {
     return toTransactionView(pending);
   }
 
+  async rejectExpired(
+    tx: TxContext,
+    pending: WagerTransaction,
+    ctx: ProcessContext,
+    at: Date,
+  ): Promise<TransactionView> {
+    pending.reject({
+      code: FailureCode.ReferenceNotFound,
+      observedBalance: this.observedBalance(ctx.wallet, {
+        type: 'REJECT',
+        code: FailureCode.ReferenceNotFound,
+      }),
+      at,
+    });
+    await tx.transactions.update(pending);
+    await tx.transactions.accelerateDependents(
+      pending.providerId,
+      pending.externalTransactionId,
+      at,
+    );
+    await tx.outbox.insertMany(this.eventsFor(pending, null, ctx));
+    this.metrics.increment('wager_transactions_total', {
+      status: pending.status,
+      kind: pending.kind,
+    });
+
+    return toTransactionView(pending);
+  }
+
   private async referenceOf(tx: TxContext, pending: WagerTransaction): Promise<ReferenceContext> {
     const externalId = pending.referenceExternalTransactionId;
 
