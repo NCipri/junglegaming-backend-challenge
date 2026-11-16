@@ -40,6 +40,10 @@ export class WalletTransactionRunner {
       `set_config('idle_in_transaction_session_timeout', '${millis(settings.idleInTxTimeoutMs)}', true)`;
   }
 
+  read<T>(work: (tx: TxContext) => Promise<T>): Promise<T> {
+    return work(createTxContext(this.em.fork(), this.metrics));
+  }
+
   async run<T>(work: (tx: TxContext) => Promise<T>, opts: RunOptions = {}): Promise<T> {
     const maxAttempts = opts.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
     let transientFailures = 0;
