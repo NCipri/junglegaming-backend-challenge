@@ -22,8 +22,8 @@ export const OPENAPI_DOCUMENT = {
   components: {
     securitySchemes: { bearer: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
     schemas: {
-      CreateWallet: z.toJSONSchema(CreateWalletSchema),
-      SubmitTransaction: z.toJSONSchema(SubmitTransactionSchema),
+      CreateWallet: z.toJSONSchema(CreateWalletSchema, { io: 'input' }),
+      SubmitTransaction: z.toJSONSchema(SubmitTransactionSchema, { io: 'input' }),
       Problem: {
         type: 'object',
         properties: {

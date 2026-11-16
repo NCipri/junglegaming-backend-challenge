@@ -5,6 +5,12 @@ import type { AppLogger } from '../../observability/logger.port';
 import type { MetricsPort } from '../../observability/metrics.port';
 import type { ReconciliationReport } from './reconcile-wallet.types';
 
+function signedMoney(amount: string, currency: string): Money {
+  return amount.startsWith('-')
+    ? Money.from({ amount: amount.slice(1), currency }).negate()
+    : Money.from({ amount, currency });
+}
+
 export class ReconcileWallet {
   constructor(
     private readonly runner: WalletTransactionRunner,
@@ -24,8 +30,8 @@ export class ReconcileWallet {
       return null;
     }
     const { currency, snapshot } = found;
-    const stored = Money.from({ amount: snapshot.stored, currency });
-    const calculated = Money.from({ amount: snapshot.calculated, currency });
+    const stored = signedMoney(snapshot.stored, currency);
+    const calculated = signedMoney(snapshot.calculated, currency);
     const difference = stored.subtract(calculated);
     const consistent = difference.isZero() && snapshot.chainIntact;
     const report: ReconciliationReport = {

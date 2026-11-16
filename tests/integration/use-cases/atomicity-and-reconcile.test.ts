@@ -148,6 +148,45 @@ describe('ReconcileWallet', () => {
     await db.query('UPDATE wallets SET balance = balance - 5.00 WHERE id = $1', [wallet.id]);
   });
 
+  test('a forged ledger whose sum goes negative is reported as a divergence, not as a 400', async () => {
+    const wallet = await openWallet('100.00');
+    const forgedTx = uuid();
+    const before = t.metrics.counter('reconciliation_divergence_total');
+
+    await db.query(
+      `INSERT INTO wager_transactions (id, provider_id, external_transaction_id, idempotency_key, payload_hash,
+         wallet_id, player_id, round_id, game_id, kind, amount, currency, status, correlation_id, created_at,
+         processed_at)
+       VALUES ($1::uuid, 'provider-a', $1::text, $1::text, $2, $3, $4, 'r', 'g', 'BET', '200.00', 'BRL',
+               'PROCESSED', 'c', now(), now())`,
+      [forgedTx, hashOf(forgedTx), wallet.id, wallet.playerId],
+    );
+    await db.query(
+      `INSERT INTO wallet_ledger_entries (id, wallet_id, currency, transaction_id, direction, amount,
+         balance_before, balance_after, wallet_version, created_at)
+       VALUES ($1, $2, 'BRL', $3, 'DEBIT', '200.00', '300.00', '100.00', 2, now())`,
+      [uuid(), wallet.id, forgedTx],
+    );
+    try {
+      const report = await app.reconcile.execute(wallet.id);
+
+      expect(report).toMatchObject({
+        consistent: false,
+        storedBalance: { amount: '100.00', currency: 'BRL' },
+        calculatedBalance: { amount: '-100.00', currency: 'BRL' },
+        difference: { amount: '200.00', currency: 'BRL' },
+        chainIntact: false,
+        firstBrokenVersion: 2,
+      });
+      expect(t.metrics.counter('reconciliation_divergence_total') - before).toBe(1);
+    } finally {
+      await db.query('ALTER TABLE wallet_ledger_entries DISABLE TRIGGER ledger_entries_immutable');
+      await db.query('DELETE FROM wallet_ledger_entries WHERE transaction_id = $1', [forgedTx]);
+      await db.query('ALTER TABLE wallet_ledger_entries ENABLE TRIGGER ledger_entries_immutable');
+      await db.query('DELETE FROM wager_transactions WHERE id = $1', [forgedTx]);
+    }
+  });
+
   test('an unknown wallet reconciles to null', async () => {
     expect(await app.reconcile.execute(uuid())).toBeNull();
   });

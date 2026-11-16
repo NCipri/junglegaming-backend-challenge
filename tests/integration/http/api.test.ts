@@ -406,6 +406,33 @@ describe('status table — 409 and 422', () => {
   });
 });
 
+describe('UUID casing', () => {
+  test('upper-case ids are normalized: the wallet answers in lower case and a BET with upper-case ids is PROCESSED', async () => {
+    const playerId = uuid().toUpperCase();
+    const created = await api.request('POST', '/wallets', {
+      body: { playerId, initialBalance: { amount: '100.00', currency: 'BRL' } },
+    });
+
+    expect(created.status).toBe(201);
+    expect(created.json['playerId']).toBe(playerId.toLowerCase());
+    const walletId = String(created.json['id']).toUpperCase();
+    const res = await submit(transaction({ id: walletId, playerId }));
+
+    expect(res.status).toBe(200);
+    expect(res.json['status']).toBe('PROCESSED');
+    const second = await submit(
+      transaction(
+        { id: walletId.toLowerCase(), playerId: playerId.toLowerCase() },
+        {
+          externalTransactionId: `tx-casing-${seq}`,
+        },
+      ),
+    );
+
+    expect(second.status).toBe(200);
+  });
+});
+
 describe('ledger pagination', () => {
   test('120 entries in pages of 50: three pages, newest first, no gaps or repeats', async () => {
     const wallet = await createWallet('1000.00');

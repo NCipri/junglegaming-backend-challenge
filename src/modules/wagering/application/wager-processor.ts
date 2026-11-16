@@ -98,6 +98,28 @@ export class WagerProcessor {
     return toTransactionView(pending);
   }
 
+  async failLocked(
+    tx: TxContext,
+    pending: WagerTransaction,
+    ctx: ProcessContext,
+    at: Date,
+  ): Promise<TransactionView> {
+    pending.fail({ code: FailureCode.UnexpectedProcessingError, at });
+    await tx.transactions.update(pending);
+    await tx.transactions.accelerateDependents(
+      pending.providerId,
+      pending.externalTransactionId,
+      at,
+    );
+    await tx.outbox.insertMany(this.eventsFor(pending, null, ctx));
+    this.metrics.increment('wager_transactions_total', {
+      status: pending.status,
+      kind: pending.kind,
+    });
+
+    return toTransactionView(pending);
+  }
+
   async rejectExpired(
     tx: TxContext,
     pending: WagerTransaction,
@@ -188,6 +210,9 @@ export class WagerProcessor {
     }
     if (tx.status === WagerStatus.Rejected) {
       return this.events.forRejected(tx, eventCtx);
+    }
+    if (tx.status === WagerStatus.Failed) {
+      return this.events.forFailed(tx, eventCtx);
     }
 
     return this.events.forPending(tx, eventCtx);

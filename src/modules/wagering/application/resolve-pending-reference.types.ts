@@ -1,5 +1,5 @@
 // Outcome and settings of resolving a pending reference.
-export type ResolveOutcome = 'PROCESSED' | 'REJECTED' | 'STILL_PENDING' | 'SKIPPED';
+export type ResolveOutcome = 'PROCESSED' | 'REJECTED' | 'FAILED' | 'STILL_PENDING' | 'SKIPPED';
 
 export interface ResolvePendingSettings {
   retryBaseMs: number;

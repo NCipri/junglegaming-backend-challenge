@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 export const PRINTABLE_ID = z.string().regex(/^[!-~]{1,120}$/);
 
-export const UUID = z.uuid();
+export const UUID = z.uuid().transform((value) => value.toLowerCase());
 
 export const MoneySchema = z.strictObject({
   amount: z.string(),

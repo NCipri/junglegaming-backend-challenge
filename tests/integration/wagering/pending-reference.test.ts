@@ -305,3 +305,32 @@ describe('ResolvePendingReference — remaining paths', () => {
     }
   });
 });
+
+describe('ResolvePendingReference — deterministic failure', () => {
+  test('a pending WIN that would overflow NUMERIC(19,2) once resolved becomes FAILED with its event, instead of retrying forever', async () => {
+    const wallet = await h.openWallet('99999999999999999.00');
+    const bet = wagerCommand(wallet, { money: { amount: '1.00', currency: 'BRL' } });
+    const win = wagerCommand(wallet, {
+      kind: WagerKind.Win,
+      money: { amount: '5.00', currency: 'BRL' },
+      referenceExternalTransactionId: bet.externalTransactionId,
+    });
+
+    await h.app.processWager.execute(win, HTTP);
+    await h.app.processWager.execute(bet, HTTP);
+    await drain(h.app);
+    const details = await h.app.getTransaction.byExternalId(
+      'provider-a',
+      win.externalTransactionId,
+      {
+        role: 'operator',
+      },
+    );
+
+    expect(String(details?.status)).toBe('FAILED');
+    expect(details?.failureCode).toBe('UNEXPECTED_PROCESSING_ERROR');
+    expect((await h.app.getWallet.execute(wallet.id))?.balance.amount).toBe('99999999999999998.00');
+    expect(await eventTypes()).toContain('WagerTransactionFailed');
+    expect(await h.count('wager_transactions', "status = 'PENDING_REFERENCE'")).toBe(0);
+  });
+});

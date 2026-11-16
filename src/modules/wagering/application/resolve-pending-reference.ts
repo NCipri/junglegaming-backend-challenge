@@ -1,4 +1,6 @@
-// Resolves one pending transaction under its wallet lock: first try to resolve, then expire by TTL, else reschedule.
+// Resolves one pending transaction under its wallet lock: try to resolve, expire by TTL or reschedule; a deterministic error becomes FAILED.
+import { classifyError } from '../../../infrastructure/db/error-classification';
+import type { TxContext } from '../../../infrastructure/db/tx-context';
 import type { WalletTransactionRunner } from '../../../infrastructure/db/wallet-transaction-runner';
 import { computeBackoff } from '../../../shared/time/backoff';
 import type { Clock } from '../../../shared/time/clock';
@@ -14,20 +16,51 @@ export class ResolvePendingReference {
     private readonly settings: ResolvePendingSettings,
   ) {}
 
-  execute(transactionId: string, now: Date = this.clock.now()): Promise<ResolveOutcome> {
+  async execute(transactionId: string, now: Date = this.clock.now()): Promise<ResolveOutcome> {
+    try {
+      return await this.resolve(transactionId, now);
+    } catch (error) {
+      if (classifyError(error).kind !== 'DETERMINISTIC') {
+        throw error;
+      }
+
+      return this.runner.run(async (tx) => {
+        const locked = await this.lockPending(tx, transactionId);
+
+        if (!locked) {
+          return 'SKIPPED';
+        }
+        await this.processor.failLocked(tx, locked.pending, locked.ctx, now);
+
+        return 'FAILED';
+      });
+    }
+  }
+
+  private async lockPending(tx: TxContext, transactionId: string) {
+    const snapshot = await tx.transactions.findById(transactionId);
+
+    if (snapshot?.status !== WagerStatus.PendingReference) {
+      return null;
+    }
+    const wallet = await tx.wallets.lockById(snapshot.walletId);
+    const pending = await tx.transactions.findById(transactionId);
+
+    if (pending?.status !== WagerStatus.PendingReference) {
+      return null;
+    }
+
+    return { pending, ctx: { wallet, correlationId: pending.correlationId } };
+  }
+
+  private resolve(transactionId: string, now: Date): Promise<ResolveOutcome> {
     return this.runner.run(async (tx) => {
-      const snapshot = await tx.transactions.findById(transactionId);
+      const locked = await this.lockPending(tx, transactionId);
 
-      if (snapshot?.status !== WagerStatus.PendingReference) {
+      if (!locked) {
         return 'SKIPPED';
       }
-      const wallet = await tx.wallets.lockById(snapshot.walletId);
-      const pending = await tx.transactions.findById(transactionId);
-
-      if (pending?.status !== WagerStatus.PendingReference) {
-        return 'SKIPPED';
-      }
-      const ctx = { wallet, correlationId: pending.correlationId };
+      const { pending, ctx } = locked;
       const view = await this.processor.processLocked(tx, pending, ctx);
 
       if (view.status === WagerStatus.Processed) {
