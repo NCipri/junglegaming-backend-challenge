@@ -537,6 +537,40 @@ describe('OutboxRepository', () => {
     expect(byId.get(retried.id)?.last_error?.length).toBe(1000);
   });
 
+  test('deferUnpublished moves several unpublished messages without counting an attempt', async () => {
+    const messages = [
+      outboxMessage(uuid(), NOW),
+      outboxMessage(uuid(), NOW),
+      outboxMessage(uuid(), NOW),
+    ];
+    const ctx = t.context();
+
+    await t.runner().run((tx) => tx.outbox.insertMany(messages));
+    await ctx.outbox.claimDue({ instanceId: 'a', limit: 10, leaseMs: 30_000, now: NOW });
+    await ctx.outbox.markPublished(messages[2]?.id ?? '', NOW);
+    await ctx.outbox.deferUnpublished(
+      messages.map((m) => m.id),
+      later(9000),
+    );
+
+    expect(
+      await ctx.outbox.claimDue({ instanceId: 'b', limit: 10, leaseMs: 30_000, now: later(8999) }),
+    ).toEqual([]);
+    const due = await ctx.outbox.claimDue({
+      instanceId: 'b',
+      limit: 10,
+      leaseMs: 30_000,
+      now: later(9000),
+    });
+
+    expect(due.map((m) => `${m.id}:${m.attempts}`).sort()).toEqual(
+      messages
+        .slice(0, 2)
+        .map((m) => `${m.id}:0`)
+        .sort(),
+    );
+  });
+
   test('oldestPendingAgeSeconds measures the oldest unpublished message', async () => {
     const ctx = t.context();
 

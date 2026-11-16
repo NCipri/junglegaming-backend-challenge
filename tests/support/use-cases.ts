@@ -111,3 +111,32 @@ export function wagerCommand(
     ...overrides,
   };
 }
+
+export class BlockingFaultInjector implements FaultInjector {
+  private release: () => void = () => undefined;
+  private readonly released: Promise<void>;
+  private reachedResolve: () => void = () => undefined;
+  readonly reached: Promise<void>;
+
+  constructor(private readonly point: FaultPoint) {
+    this.released = new Promise((resolve) => {
+      this.release = resolve;
+    });
+    this.reached = new Promise((resolve) => {
+      this.reachedResolve = resolve;
+    });
+  }
+
+  hit(point: FaultPoint): Promise<void> {
+    if (point !== this.point) {
+      return Promise.resolve();
+    }
+    this.reachedResolve();
+
+    return this.released;
+  }
+
+  open(): void {
+    this.release();
+  }
+}

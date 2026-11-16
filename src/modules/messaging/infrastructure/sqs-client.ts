@@ -12,6 +12,7 @@ export function createSqsClient(options: SqsClientOptions): SQSClient {
     requestHandler: new NodeHttpHandler({
       connectionTimeout: options.connectTimeoutMs,
       requestTimeout: options.requestTimeoutMs,
+      throwOnRequestTimeout: true,
     }),
   });
 }

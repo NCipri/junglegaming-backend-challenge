@@ -97,6 +97,18 @@ export class OutboxRepository {
     );
   }
 
+  async deferUnpublished(ids: readonly string[], nextAttemptAt: Date): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    await this.em.execute(
+      `UPDATE outbox_messages SET next_attempt_at = ?, locked_until = NULL, locked_by = NULL
+        WHERE id IN (?) AND published_at IS NULL`,
+      [nextAttemptAt, ids],
+      'run',
+    );
+  }
+
   async oldestPendingAgeSeconds(now: Date): Promise<number> {
     const rows = await this.em.execute<{ age: number }[]>(OLDEST_PENDING_SQL, [now]);
 
