@@ -1,4 +1,4 @@
-// Single backoff formula (D-058): min(base × 2^attempts × jitter[0.8, 1.2], cap), in whole milliseconds.
+// Single backoff formula: min(base × 2^attempts × jitter[0.8, 1.2], cap), in whole milliseconds.
 export interface BackoffInput {
   attempts: number;
   baseMs: number;

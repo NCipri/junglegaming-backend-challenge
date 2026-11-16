@@ -1,4 +1,4 @@
-// Ledger repository: insert-only entries, keyset pages and the single-query reconciliation snapshot (D-057).
+// Ledger repository: insert-only entries, keyset pages and the single-query reconciliation snapshot.
 import { IsolationLevel } from '@mikro-orm/core';
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { selectList, type SelectedRow } from '../../../infrastructure/db/sql-columns';

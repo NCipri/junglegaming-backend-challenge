@@ -1,4 +1,4 @@
-// Pure wagering decision: evaluates the business rules in the fixed D-053 order; first violation wins.
+// Pure wagering decision: evaluates the business rules in a fixed order; first violation wins.
 import { LedgerDirection } from '../../wallet/domain/ledger-direction';
 import type { Wallet } from '../../wallet/domain/wallet';
 import { FailureCode } from './failure-code';

@@ -1,4 +1,4 @@
-// Builds the outbox messages a transaction outcome must emit (design §5.6), partitioned by wallet.
+// Builds the outbox messages a transaction outcome must emit, partitioned by wallet.
 import type { Clock } from '../../../shared/time/clock';
 import type { IdGenerator } from '../../../shared/ids/id-generator';
 import type { WalletLedgerEntry } from '../../wallet/domain/wallet-ledger-entry';

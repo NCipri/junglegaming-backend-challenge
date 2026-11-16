@@ -39,7 +39,7 @@ function writesIn(queries: string[]): string[] {
   });
 }
 
-describe('write order inside the transaction (D-049, D-057)', () => {
+describe('write order inside the transaction', () => {
   test('processing a BET emits UPDATE wallets → INSERT wager_transactions → INSERT ledger → INSERT outbox, each before COMMIT', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const events = new EventFactory({ next: uuid }, { now: () => NOW });

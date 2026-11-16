@@ -1,4 +1,4 @@
-// Inbox repository: atomic dedupe insert that tells a duplicate apart from a payload conflict (D-022, D-058).
+// Inbox repository: atomic dedupe insert that tells a duplicate apart from a payload conflict.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { InboxMessage } from '../domain/inbox-message';
 import type { InboxInsertOutcome } from './inbox.repository.types';

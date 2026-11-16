@@ -1,4 +1,4 @@
-// MikroORM options: the migration runner (schema owner, migrator) and the runtime app connection (D-012, D-059).
+// MikroORM options: the migration runner (schema owner, migrator) and the runtime app connection.
 import { defineConfig } from '@mikro-orm/postgresql';
 import { Migrator } from '@mikro-orm/migrations';
 import { ProviderRecordSchema } from '../../modules/identity/provider.record';

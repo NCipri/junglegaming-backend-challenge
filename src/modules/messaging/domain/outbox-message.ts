@@ -1,4 +1,4 @@
-// Outbox message: an event committed with its transaction, published later with backoff retries (D-023, D-058).
+// Outbox message: an event committed with its transaction, published later with backoff retries.
 import { computeBackoff } from '../../../shared/time/backoff';
 import type { IntegrationEvent } from './integration-event';
 import { InvalidMessageStateError } from './messaging.errors';

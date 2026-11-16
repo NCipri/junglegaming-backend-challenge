@@ -93,7 +93,7 @@ function outboxMessage(walletId: string, occurredAt: Date): OutboxMessage {
   });
 }
 
-describe('mappers always rebuild domain objects through rehydrate (D-008)', () => {
+describe('mappers always rebuild domain objects through rehydrate', () => {
   const spies: { mockRestore(): void }[] = [];
 
   afterEach(() => {
@@ -322,7 +322,7 @@ describe('WagerTransactionRepository', () => {
     expect((await t.context().transactions.findById(refund.id))?.status).toBe(WagerStatus.Rejected);
   });
 
-  test('referenceFacts distinguishes any, effective and settling facts (D-060, B-4)', async () => {
+  test('referenceFacts distinguishes any, effective and settling facts', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const { bet } = await t.runner().run((tx) => applyBet(tx, seeded.wallet.id));
     const ctx = t.context();

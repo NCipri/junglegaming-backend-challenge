@@ -1,4 +1,4 @@
-// Metrics port with the closed set of metric names from design §11; metrics never carry money.
+// Metrics port with the closed set of metric names; metrics never carry money.
 export type CounterName =
   | 'wager_transactions_total'
   | 'idempotent_replays_total'

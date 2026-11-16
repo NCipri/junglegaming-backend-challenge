@@ -379,7 +379,7 @@ describe('wager_transactions', () => {
   });
 });
 
-describe('BET already settled (D-050, D-057, D-060)', () => {
+describe('BET already settled', () => {
   async function settledBet() {
     const walletId = await wallet();
     const betId = await tx({ walletId, kind: 'BET' });

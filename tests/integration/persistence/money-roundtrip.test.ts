@@ -33,7 +33,7 @@ beforeEach(async () => {
   await resetDatabase(pg.migratorUrl);
 });
 
-describe('money round-trip through the persistence records (D-009)', () => {
+describe('money round-trip through the persistence records', () => {
   test('the largest NUMERIC(19,2) balance survives write and read as an identical string', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: MAX }));
     const wallet = await t.context().wallets.findById(seeded.wallet.id);

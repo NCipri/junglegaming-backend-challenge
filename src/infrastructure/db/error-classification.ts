@@ -1,4 +1,4 @@
-// Error classification (D-045, D-056, D-057): closed deterministic list, unique violations apart, the rest transient.
+// Error classification: closed deterministic list, unique violations apart, the rest transient.
 import { DomainError } from '../../shared/errors/domain-error';
 import { TransientPersistenceError, VersionConflictError } from './persistence.errors';
 

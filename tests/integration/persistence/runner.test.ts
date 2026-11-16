@@ -83,7 +83,7 @@ async function debit(tx: TxContext, walletId: string, amount: string): Promise<W
   return wallet;
 }
 
-describe('WalletTransactionRunner — unique violations (D-057)', () => {
+describe('WalletTransactionRunner — unique violations', () => {
   test('a (provider_id, idempotency_key) violation re-executes the unit instead of failing with 25P02', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const winner = newWager(seeded.wallet, { idempotencyKey: 'same-key' });
@@ -135,7 +135,7 @@ describe('WalletTransactionRunner — unique violations (D-057)', () => {
   });
 });
 
-describe('WalletTransactionRunner — serialization per wallet (D-030)', () => {
+describe('WalletTransactionRunner — serialization per wallet', () => {
   test('a second run on the same wallet waits for the first and sees its committed balance', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const firstLocked = deferred();
@@ -172,7 +172,7 @@ describe('WalletTransactionRunner — serialization per wallet (D-030)', () => {
   });
 });
 
-describe('WalletTransactionRunner — transient errors (D-045)', () => {
+describe('WalletTransactionRunner — transient errors', () => {
   test('lock_timeout while another session holds the wallet → TRANSIENT after 3 attempts, metrics incremented', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const holder = new Client({ connectionString: pg.migratorUrl });
@@ -275,7 +275,7 @@ describe('WalletTransactionRunner — deterministic errors and shutdown', () => 
     expect(classifyError(error)).toEqual({ kind: 'DETERMINISTIC', reason: 'DATA_EXCEPTION_22003' });
   });
 
-  test('an aborted signal kills the session, rolls back and does not retry (D-059)', async () => {
+  test('an aborted signal kills the session, rolls back and does not retry', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const holder = new Client({ connectionString: pg.migratorUrl });
     const controller = new AbortController();

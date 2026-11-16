@@ -4,7 +4,7 @@ import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
 const MONEY_PROPERTY = '/^(amount|balance\\w*|money)$/';
-const NUMBER_FOR_MONEY = 'Money must never be a number (D-009). Use Money / decimal strings.';
+const NUMBER_FOR_MONEY = 'Money must never be a number. Use Money / decimal strings.';
 
 export default tseslint.config(
   { ignores: ['node_modules/', 'docs/', 'dist/', 'coverage/'] },
@@ -52,11 +52,11 @@ export default tseslint.config(
           patterns: [
             {
               group: ['@nestjs/*'],
-              message: 'The domain layer must not depend on NestJS (D-008).',
+              message: 'The domain layer must not depend on NestJS.',
             },
             {
               group: ['@mikro-orm/*'],
-              message: 'The domain layer must not depend on MikroORM (D-008).',
+              message: 'The domain layer must not depend on MikroORM.',
             },
           ],
         },

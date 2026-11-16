@@ -1,4 +1,4 @@
-// Least-privilege grants for the runtime role app (D-012): the ledger is insert-only, providers read-only.
+// Least-privilege grants for the runtime role app: the ledger is insert-only, providers read-only.
 import { Migration } from '@mikro-orm/migrations';
 
 export class Migration20261115000003_privileges extends Migration {

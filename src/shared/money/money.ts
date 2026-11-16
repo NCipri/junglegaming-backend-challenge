@@ -1,4 +1,4 @@
-// Money value object: exact decimal amounts, scale 2, immutable, currency-safe (D-009, D-014).
+// Money value object: exact decimal amounts, scale 2, immutable, currency-safe.
 import Decimal from 'decimal.js';
 import { CurrencyMismatchError, InvalidMoneyError } from './money.errors';
 

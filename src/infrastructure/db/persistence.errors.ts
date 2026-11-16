@@ -1,4 +1,4 @@
-// Persistence errors: optimistic version conflicts (B-5) and failures already classified as transient.
+// Persistence errors: optimistic version conflicts and failures already classified as transient.
 export class VersionConflictError extends Error {
   constructor(
     readonly table: string,

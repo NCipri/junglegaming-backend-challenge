@@ -1,4 +1,4 @@
-// Outbox repository: inserts in the business transaction, lease-based claims with SKIP LOCKED and publish bookkeeping (D-023, D-024).
+// Outbox repository: inserts in the business transaction, lease-based claims with SKIP LOCKED and publish bookkeeping.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { OutboxMessage } from '../domain/outbox-message';
 import type { ClaimedOutboxMessage, ClaimOutboxParams } from './outbox.repository.types';

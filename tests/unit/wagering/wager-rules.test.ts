@@ -57,7 +57,7 @@ const rollbackOf = (ref: WagerTransaction, amount = ref.money.toJSON().amount) =
     referenceExternalTransactionId: ref.externalTransactionId,
   });
 
-describe('decideWager — one rule per failure code, in D-053 order', () => {
+describe('decideWager — one rule per failure code, in rule order', () => {
   test('OPENING_NOT_ALLOWED', () => {
     expect(decideWager(context({ transaction: wager({ kind: WagerKind.Opening }) }))).toEqual({
       type: 'REJECT',
@@ -218,7 +218,7 @@ describe('decideWager — one rule per failure code, in D-053 order', () => {
     });
   });
 
-  test('ALREADY_REVERSED when the reference already has a reversal (even an undone one — B-4)', () => {
+  test('ALREADY_REVERSED when the reference already has a reversal (even an undone one)', () => {
     const ref = bet();
 
     expect(
@@ -228,7 +228,7 @@ describe('decideWager — one rule per failure code, in D-053 order', () => {
     ).toEqual({ type: 'REJECT', code: 'ALREADY_REVERSED' });
   });
 
-  test('ALREADY_REVERSED for a WIN on a BET with an effective reversal (D-028)', () => {
+  test('ALREADY_REVERSED for a WIN on a BET with an effective reversal', () => {
     const ref = bet();
     const win = wager({
       kind: WagerKind.Win,
@@ -246,7 +246,7 @@ describe('decideWager — one rule per failure code, in D-053 order', () => {
     ).toEqual({ type: 'REJECT', code: 'ALREADY_REVERSED' });
   });
 
-  test('BET_ALREADY_SETTLED for a REFUND of a BET with an active WIN (D-050)', () => {
+  test('BET_ALREADY_SETTLED for a REFUND of a BET with an active WIN', () => {
     const ref = bet();
 
     expect(
@@ -259,7 +259,7 @@ describe('decideWager — one rule per failure code, in D-053 order', () => {
     ).toEqual({ type: 'REJECT', code: 'BET_ALREADY_SETTLED' });
   });
 
-  test('BET_ALREADY_SETTLED for a ROLLBACK of a BET with an active WIN (D-050)', () => {
+  test('BET_ALREADY_SETTLED for a ROLLBACK of a BET with an active WIN', () => {
     const ref = bet();
 
     expect(
@@ -342,7 +342,7 @@ describe('decideWager — applying', () => {
     });
   });
 
-  test('a WIN without reference after a LOSS in the same round is applied (D-004)', () => {
+  test('a WIN without reference after a LOSS in the same round is applied', () => {
     expect(
       decideWager(context({ transaction: wager({ kind: WagerKind.Win, money: brl('25.00') }) })),
     ).toEqual({
@@ -351,7 +351,7 @@ describe('decideWager — applying', () => {
     });
   });
 
-  test('a WIN on a BET whose reversal was undone is applied (D-060)', () => {
+  test('a WIN on a BET whose reversal was undone is applied', () => {
     const ref = bet();
     const win = wager({
       kind: WagerKind.Win,

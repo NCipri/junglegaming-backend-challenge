@@ -1,4 +1,4 @@
-// Triggers: immutable ledger, terminal/immutable wager transactions and the BET-already-settled guard (D-050).
+// Triggers: immutable ledger, terminal/immutable wager transactions and the BET-already-settled guard.
 import { Migration } from '@mikro-orm/migrations';
 
 export class Migration20261115000002_triggers extends Migration {

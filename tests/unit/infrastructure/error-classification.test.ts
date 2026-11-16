@@ -11,7 +11,7 @@ function pgError(code: string, extra: Record<string, unknown> = {}): Error {
   return Object.assign(new Error(`pg error ${code}`), { code, ...extra });
 }
 
-describe('classifyError — transient by default (D-045)', () => {
+describe('classifyError — transient by default', () => {
   test.each([
     ['40P01', 'DEADLOCK'],
     ['55P03', 'LOCK_TIMEOUT'],
@@ -59,14 +59,14 @@ describe('classifyError — transient by default (D-045)', () => {
     expect(classifyError(undefined)).toEqual({ kind: 'TRANSIENT', reason: 'INFRASTRUCTURE' });
   });
 
-  test('a wallet version conflict is TRANSIENT (B-5)', () => {
+  test('a wallet version conflict is TRANSIENT', () => {
     expect(classifyError(new VersionConflictError('wallets', 'w-1'))).toEqual({
       kind: 'TRANSIENT',
       reason: 'VERSION_CONFLICT',
     });
   });
 
-  test('a ledger (wallet_id, wallet_version) collision is TRANSIENT (D-057)', () => {
+  test('a ledger (wallet_id, wallet_version) collision is TRANSIENT', () => {
     const error = pgError('23505', { constraint: 'wallet_ledger_entries_wallet_version_key' });
 
     expect(classifyError(error)).toEqual({ kind: 'TRANSIENT', reason: 'LEDGER_VERSION_CONFLICT' });
@@ -79,7 +79,7 @@ describe('classifyError — transient by default (D-045)', () => {
   });
 });
 
-describe('classifyError — unique violations (D-057)', () => {
+describe('classifyError — unique violations', () => {
   test.each([
     'wager_transactions_provider_idempotency_key',
     'wager_transactions_provider_external_id_key',
@@ -100,7 +100,7 @@ describe('classifyError — unique violations (D-057)', () => {
   });
 });
 
-describe('classifyError — deterministic closed list (D-056)', () => {
+describe('classifyError — deterministic closed list', () => {
   test.each([
     ['23514', 'INTEGRITY_VIOLATION_23514'],
     ['23502', 'INTEGRITY_VIOLATION_23502'],

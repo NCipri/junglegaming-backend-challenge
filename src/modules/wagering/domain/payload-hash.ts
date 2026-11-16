@@ -1,4 +1,4 @@
-// Idempotency payload hash: SHA-256 of canonical JSON over business fields only (D-058, design §9.4).
+// Idempotency payload hash: SHA-256 of canonical JSON over business fields only.
 import { canonicalJson, sha256Hex } from '../../../shared/hashing/canonical-json';
 import type { WagerPayload } from './wager-transaction.types';
 

@@ -1,4 +1,4 @@
-// Wallet repository: the only wallet row lock in the codebase (lockById) and explicit version-checked writes (D-030, B-5).
+// Wallet repository: the only wallet row lock in the codebase (lockById) and explicit version-checked writes.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import { VersionConflictError } from '../../../infrastructure/db/persistence.errors';
 import { selectList, type SelectedRow } from '../../../infrastructure/db/sql-columns';

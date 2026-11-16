@@ -1,4 +1,4 @@
-// Persistence record of the insert-only wallet_ledger_entries table; amounts are decimal strings (D-009).
+// Persistence record of the insert-only wallet_ledger_entries table; amounts are decimal strings.
 import { EntitySchema } from '@mikro-orm/core';
 import type { ColumnMap } from '../../../infrastructure/db/sql-columns';
 

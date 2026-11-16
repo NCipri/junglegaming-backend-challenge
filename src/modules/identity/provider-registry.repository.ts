@@ -1,4 +1,4 @@
-// Provider registry: reads a provider and whether it is active (D-003).
+// Provider registry: reads a provider and whether it is active.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { ProviderInfo } from './provider-registry.types';
 

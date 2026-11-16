@@ -1,4 +1,4 @@
-// Abstract integration event (README §11): eventType and version live on each concrete subclass.
+// Abstract integration event: eventType and version live on each concrete subclass.
 import type { EventEnvelope, IntegrationEventProps } from './integration-event.types';
 
 export abstract class IntegrationEvent<T> {

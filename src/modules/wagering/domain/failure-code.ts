@@ -1,4 +1,4 @@
-// Stable, machine-readable failure codes carried by REJECTED and FAILED transactions (D-019).
+// Stable, machine-readable failure codes carried by REJECTED and FAILED transactions.
 export const FailureCode = {
   InsufficientBalance: 'INSUFFICIENT_BALANCE',
   ReversalWouldOverdraw: 'REVERSAL_WOULD_OVERDRAW',

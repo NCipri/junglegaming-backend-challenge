@@ -1,4 +1,4 @@
-// Persistence record of the read-only providers table (seeded by migration, D-003).
+// Persistence record of the read-only providers table (seeded by migration).
 import { EntitySchema } from '@mikro-orm/core';
 
 export interface ProviderRecord {

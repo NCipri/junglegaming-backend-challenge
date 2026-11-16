@@ -1,4 +1,4 @@
-// Persistence record of the wallets table; the balance stays a decimal string end to end (D-009).
+// Persistence record of the wallets table; the balance stays a decimal string end to end.
 import { EntitySchema } from '@mikro-orm/core';
 import type { ColumnMap } from '../../../infrastructure/db/sql-columns';
 

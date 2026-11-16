@@ -1,4 +1,4 @@
-// Seeds the active game providers; their ids match the Keycloak client ids (D-003).
+// Seeds the active game providers; their ids match the Keycloak client ids.
 import { Migration } from '@mikro-orm/migrations';
 
 export class Migration20261115000004_seed_providers extends Migration {

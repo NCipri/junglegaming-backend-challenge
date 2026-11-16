@@ -1,4 +1,4 @@
-// Immutable wallet ledger entry whose factory enforces before ± money = after (D-020).
+// Immutable wallet ledger entry whose factory enforces before ± money = after.
 import { Money } from '../../../shared/money/money';
 import { LedgerDirection } from './ledger-direction';
 import { UnbalancedLedgerEntryError } from './wallet.errors';

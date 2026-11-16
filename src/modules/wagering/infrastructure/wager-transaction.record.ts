@@ -1,4 +1,4 @@
-// Persistence record of the wager_transactions table; amount and observed balance are decimal strings (D-009).
+// Persistence record of the wager_transactions table; amount and observed balance are decimal strings.
 import { EntitySchema } from '@mikro-orm/core';
 import type { ColumnMap } from '../../../infrastructure/db/sql-columns';
 

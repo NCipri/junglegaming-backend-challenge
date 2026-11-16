@@ -1,4 +1,4 @@
-// The single entry point for transactional work (D-030): server timeouts, retries by error class and cancellation.
+// The single entry point for transactional work: server timeouts, retries by error class and cancellation.
 import type { EntityManager } from '@mikro-orm/postgresql';
 import type { MetricsPort } from '../../modules/observability/metrics.port';
 import { computeBackoff } from '../../shared/time/backoff';
