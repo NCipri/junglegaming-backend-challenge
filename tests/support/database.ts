@@ -44,3 +44,12 @@ export async function existingApplicationTables(url: string): Promise<string[]> 
     return rows.map((row) => row.table_name);
   });
 }
+
+export async function setLedgerMatch(client: Client, enabled: boolean): Promise<void> {
+  const action = enabled ? 'ENABLE' : 'DISABLE';
+
+  await client.query(`ALTER TABLE wallets ${action} TRIGGER wallets_match_ledger`);
+  await client.query(
+    `ALTER TABLE wallet_ledger_entries ${action} TRIGGER ledger_entries_match_wallet`,
+  );
+}

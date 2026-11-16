@@ -10,6 +10,12 @@ beforeAll(async () => {
   pg = await startPostgres();
   await migrateUp(pg.migratorUrl);
   await resetDatabase(pg.migratorUrl);
+  await withClient(pg.migratorUrl, async (client) => {
+    await client.query('ALTER TABLE wallets DISABLE TRIGGER wallets_match_ledger');
+    await client.query(
+      'ALTER TABLE wallet_ledger_entries DISABLE TRIGGER ledger_entries_match_wallet',
+    );
+  });
 }, 120_000);
 
 afterAll(async () => {

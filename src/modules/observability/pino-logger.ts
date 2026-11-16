@@ -45,6 +45,10 @@ export class PinoAppLogger implements AppLogger {
   error(context: LogContext, message: string): void {
     this.logger.error(context, message);
   }
+
+  flush(): void {
+    this.logger.flush();
+  }
 }
 
 export function createPinoLogger(options: PinoLoggerOptions): PinoAppLogger {

@@ -250,3 +250,22 @@ describe('SIGTERM with an HTTP request in flight', () => {
     await assertAllWalletsInvariants(c.db);
   }, 60_000);
 });
+
+describe('a failure during shutdown', () => {
+  test('is logged (flushed before exit) and the process exits with code 1 instead of hanging', async () => {
+    const target = await c.spawn('shutdown-failure', {
+      roles: ALL_ROLES,
+      env: { FAULT_INJECTION: 'during-shutdown:throw', LOG_LEVEL: 'info' },
+    });
+    const signalledAt = Date.now();
+
+    target.kill('SIGTERM');
+    const exitCode = await target.exited;
+    const log = await Bun.file(target.logFile).text();
+
+    expect(exitCode).toBe(1);
+    expect(Date.now() - signalledAt).toBeLessThan(20_000);
+    expect(log).toContain('Shutdown failed');
+    expect(log).toContain('during-shutdown');
+  }, 60_000);
+});

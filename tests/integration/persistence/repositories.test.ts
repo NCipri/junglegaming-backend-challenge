@@ -10,7 +10,7 @@ import {
 } from 'bun:test';
 import { Client } from 'pg';
 import { startPostgres, type TestPostgres } from '../../support/containers';
-import { migrateUp, resetDatabase } from '../../support/database';
+import { migrateUp, resetDatabase, setLedgerMatch } from '../../support/database';
 import { hashOf, money, newWager, NOW, seedWallet, uuid } from '../../support/builders';
 import { assertWalletInvariants } from '../../support/invariants';
 import { createTestOrm, type TestOrm } from '../../support/persistence';
@@ -220,6 +220,7 @@ describe('LedgerRepository', () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
     const forgedTx = uuid();
 
+    await setLedgerMatch(db, false);
     await db.query(
       `INSERT INTO wager_transactions (id, provider_id, external_transaction_id, idempotency_key, payload_hash,
          wallet_id, player_id, round_id, game_id, kind, amount, currency, status, correlation_id, created_at,
@@ -235,6 +236,7 @@ describe('LedgerRepository', () => {
       [uuid(), seeded.wallet.id, forgedTx, NOW],
     );
 
+    await setLedgerMatch(db, true);
     expect(await t.context().ledger.reconciliationSnapshot(seeded.wallet.id)).toEqual({
       stored: '100.00',
       walletVersion: 1,
@@ -248,7 +250,9 @@ describe('LedgerRepository', () => {
   test('reconciliationSnapshot flags a wallet version ahead of its last entry', async () => {
     const seeded = await t.runner().run((tx) => seedWallet(tx, { balance: '100.00' }));
 
+    await setLedgerMatch(db, false);
     await db.query('UPDATE wallets SET version = 3 WHERE id = $1', [seeded.wallet.id]);
+    await setLedgerMatch(db, true);
     const snapshot = await t.context().ledger.reconciliationSnapshot(seeded.wallet.id);
 
     expect(snapshot?.chainIntact).toBe(false);

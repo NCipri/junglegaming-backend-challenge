@@ -29,6 +29,8 @@ export type { MessageConsumerPort, SqsConsumerSettings } from './sqs-consumer.ty
 
 type Outcome = 'DONE' | 'RETRY' | 'RELEASED';
 
+const LONG_POLL_MARGIN_SECONDS = 5;
+
 const PERMANENT_RESULTS: Partial<Record<WagerResult['type'], string>> = {
   INBOX_PAYLOAD_CONFLICT: 'INBOX_PAYLOAD_CONFLICT',
   IDEMPOTENCY_CONFLICT: 'IDEMPOTENCY_CONFLICT',
@@ -71,7 +73,10 @@ export class SqsConsumer implements MessageConsumerPort {
         MessageAttributeNames: ['All'],
         MessageSystemAttributeNames: ['ApproximateReceiveCount', 'MessageGroupId'],
       }),
-      signal ? { abortSignal: signal } : {},
+      {
+        requestTimeout: (this.settings.waitTimeSeconds + LONG_POLL_MARGIN_SECONDS) * 1000,
+        ...(signal ? { abortSignal: signal } : {}),
+      },
     );
     const groups = new Map<string, Message[]>();
 
@@ -80,11 +85,16 @@ export class SqsConsumer implements MessageConsumerPort {
 
       groups.set(group, [...(groups.get(group) ?? []), message]);
     }
-    const work = Promise.all([...groups.values()].map((group) => this.processGroup(group)));
+    const work = Promise.allSettled([...groups.values()].map((group) => this.processGroup(group)));
 
     this.pending.add(work);
     try {
-      await work;
+      const results = await work;
+      const failure = results.find((result) => result.status === 'rejected');
+
+      if (failure) {
+        throw failure.reason;
+      }
     } finally {
       this.pending.delete(work);
     }

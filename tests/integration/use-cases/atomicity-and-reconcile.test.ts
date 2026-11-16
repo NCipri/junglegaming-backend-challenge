@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { Client } from 'pg';
 import { startPostgres, type TestPostgres } from '../../support/containers';
-import { migrateUp, resetDatabase } from '../../support/database';
+import { migrateUp, resetDatabase, setLedgerMatch } from '../../support/database';
 import { hashOf, uuid } from '../../support/builders';
 import { assertAllWalletsInvariants } from '../../support/invariants';
 import { createTestOrm, type TestOrm } from '../../support/persistence';
@@ -133,6 +133,7 @@ describe('ReconcileWallet', () => {
     const wallet = await openWallet('100.00');
     const before = t.metrics.counter('reconciliation_divergence_total');
 
+    await setLedgerMatch(db, false);
     await db.query('UPDATE wallets SET balance = balance + 5.00 WHERE id = $1', [wallet.id]);
     const report = await app.reconcile.execute(wallet.id);
 
@@ -146,6 +147,7 @@ describe('ReconcileWallet', () => {
     expect(app.logger.errors.at(-1)?.context).toMatchObject({ walletId: wallet.id });
     expect((await app.getWallet.execute(wallet.id))?.balance.amount).toBe('105.00');
     await db.query('UPDATE wallets SET balance = balance - 5.00 WHERE id = $1', [wallet.id]);
+    await setLedgerMatch(db, true);
   });
 
   test('a forged ledger whose sum goes negative is reported as a divergence, not as a 400', async () => {
@@ -153,6 +155,7 @@ describe('ReconcileWallet', () => {
     const forgedTx = uuid();
     const before = t.metrics.counter('reconciliation_divergence_total');
 
+    await setLedgerMatch(db, false);
     await db.query(
       `INSERT INTO wager_transactions (id, provider_id, external_transaction_id, idempotency_key, payload_hash,
          wallet_id, player_id, round_id, game_id, kind, amount, currency, status, correlation_id, created_at,
@@ -183,7 +186,9 @@ describe('ReconcileWallet', () => {
       await db.query('ALTER TABLE wallet_ledger_entries DISABLE TRIGGER ledger_entries_immutable');
       await db.query('DELETE FROM wallet_ledger_entries WHERE transaction_id = $1', [forgedTx]);
       await db.query('ALTER TABLE wallet_ledger_entries ENABLE TRIGGER ledger_entries_immutable');
+      await db.query('ALTER TABLE wager_transactions DISABLE TRIGGER wager_transactions_no_delete');
       await db.query('DELETE FROM wager_transactions WHERE id = $1', [forgedTx]);
+      await db.query('ALTER TABLE wager_transactions ENABLE TRIGGER wager_transactions_no_delete');
     }
   });
 

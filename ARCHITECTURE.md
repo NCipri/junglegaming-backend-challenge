@@ -84,10 +84,13 @@ As invariantes ficam **dentro das classes**, com estado privado e transições e
 
 - `PENDING` existe só em memória: a linha **nasce já no estado final** (o `CHECK` de status nem aceita `PENDING`).
 - `PROCESSED`, `REJECTED` e `FAILED` são terminais — garantido também por trigger, que ainda recusa mudar colunas imutáveis (provider, ids, key, hash, wallet, player, rodada, jogo, tipo, valor, moeda).
+- Transações e wallets **nunca são apagadas** (trigger, inclusive para o dono do schema), e a identidade da wallet (`id`, `player_id`, `currency`, `created_at`) é imutável.
 
 ### `WalletLedgerEntry`
 
 Imutável (congelado em runtime), `amount > 0`, aritmética conferida na fábrica e por `CHECK` no banco. O ledger é **encadeado** por `wallet_version`: `UNIQUE (wallet_id, wallet_version)`, e cada lançamento começa onde o anterior terminou — a reconciliação detecta qualquer quebra.
+
+**Saldo e ledger amarrados no banco:** constraint triggers `DEFERRABLE INITIALLY DEFERRED` conferem, no `COMMIT`, que o saldo e a versão de cada wallet alterada são iguais ao `balance_after` e à `wallet_version` do último lançamento (ou `0.00` na versão 1, sem lançamentos). Um bug que mudasse o saldo sem lançamento — ou o contrário — é recusado no commit e a transação vira `FAILED`, sem estado parcial (testado também por mutação: removido o INSERT do lançamento, a aposta vira `FAILED` e o saldo fica intacto).
 
 ### `InboxMessage`, `OutboxMessage` e eventos de integração
 
@@ -119,7 +122,7 @@ Colunas `NUMERIC(19,2)` + moeda `CHAR(3)` com `CHECK`. O driver `pg` devolve `NU
 - Logo após o `BEGIN`: `lock_timeout = 5s`, `statement_timeout = 10s`, `idle_in_transaction_session_timeout = 30s` (locais à transação).
 - Repetição por **classe de erro**: transitório → até 3 tentativas com jitter; violação de unicidade → rollback e reexecução da unidade inteira (até 2 vezes); determinístico → sobe na hora.
 - Cancelamento por `AbortSignal` (fecha a sessão no banco ⇒ rollback), usado no shutdown.
-- Timeouts do cliente: conexão e pool 5 s, query 15 s, SQS 5 s/10 s — com o banco ou o SQS travados, nada fica pendurado (há teste com o Postgres pausado: 503 em menos de 20 s).
+- Timeouts do cliente: conexão e pool 5 s, query 15 s, SQS 5 s/10 s (o long polling usa espera + 5 s, por requisição) — com o banco ou o SQS travados, nada fica pendurado (há teste com o Postgres pausado: 503 em menos de 20 s).
 
 ### Papéis do banco (menor privilégio)
 

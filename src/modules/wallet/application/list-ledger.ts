@@ -27,11 +27,15 @@ export class ListLedger {
     }
     const limit = Math.min(requested, MAX_LEDGER_LIMIT);
     const beforeVersion = p.cursor === undefined ? undefined : decodeCursor(p.cursor);
-    const entries = await this.runner.read((tx) =>
-      tx.ledger.page(walletId, beforeVersion === undefined ? { limit } : { limit, beforeVersion }),
+    const fetched = await this.runner.read((tx) =>
+      tx.ledger.page(
+        walletId,
+        beforeVersion === undefined ? { limit: limit + 1 } : { limit: limit + 1, beforeVersion },
+      ),
     );
+    const entries = fetched.slice(0, limit);
     const last = entries.at(-1);
-    const hasMore = entries.length === limit && last !== undefined && last.walletVersion > 1;
+    const hasMore = fetched.length > limit && last !== undefined;
 
     return {
       items: entries.map(toLedgerEntryView),

@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  FaultInjectedError,
   NoopFaultInjector,
+  parseFaultInjection,
   ProcessKillFaultInjector,
 } from '../../../src/infrastructure/fault/fault-injector';
 import { createSqsClient } from '../../../src/modules/messaging/infrastructure/sqs-client';
@@ -71,5 +73,30 @@ describe('DlqDepthCollector', () => {
 
     expect(metrics.gauge('dlq_depth')).toBeUndefined();
     expect(capture.entries().some((entry) => entry['msg'] === 'DLQ depth read failed')).toBe(true);
+  });
+});
+
+describe('parseFaultInjection', () => {
+  test('no value or an unknown point gives the no-op injector', async () => {
+    expect(parseFaultInjection(undefined)).toBeInstanceOf(NoopFaultInjector);
+    expect(parseFaultInjection('nowhere')).toBeInstanceOf(NoopFaultInjector);
+    expect(parseFaultInjection('nowhere:throw')).toBeInstanceOf(NoopFaultInjector);
+    expect(await parseFaultInjection(undefined).hit('before-commit')).toBeUndefined();
+  });
+
+  test('a bare point kills the process; "<point>:throw" throws at that point only', async () => {
+    expect(parseFaultInjection('after-commit-before-ack')).toBeInstanceOf(ProcessKillFaultInjector);
+    const throwing = parseFaultInjection('during-shutdown:throw');
+
+    expect(await throwing.hit('before-commit')).toBeUndefined();
+    let caught: unknown = null;
+
+    try {
+      await throwing.hit('during-shutdown');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(FaultInjectedError);
   });
 });

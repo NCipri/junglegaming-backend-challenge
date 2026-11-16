@@ -10,6 +10,7 @@ export interface AppProcess {
   baseUrl: string;
   process: Subprocess;
   exited: Promise<number>;
+  logFile: string;
   waitReady(timeoutMs?: number): Promise<void>;
   kill(signal: 'SIGTERM' | 'SIGKILL'): void;
 }
@@ -34,6 +35,7 @@ export function spawnApp(p: {
   mkdirSync(LOG_DIR, { recursive: true });
   const httpPort = freePort();
   const metricsPort = freePort();
+  const logFile = resolve(LOG_DIR, `${p.name}-${httpPort}.log`);
   const child = Bun.spawn(['bun', 'src/main.ts'], {
     cwd: ROOT,
     env: {
@@ -45,7 +47,7 @@ export function spawnApp(p: {
       METRICS_PORT: String(metricsPort),
       LOG_LEVEL: p.env['LOG_LEVEL'] ?? 'warn',
     },
-    stdout: Bun.file(resolve(LOG_DIR, `${p.name}-${httpPort}.log`)),
+    stdout: Bun.file(logFile),
     stderr: Bun.file(resolve(LOG_DIR, `${p.name}-${httpPort}.err.log`)),
   });
   const baseUrl = `http://127.0.0.1:${httpPort}`;
@@ -55,6 +57,7 @@ export function spawnApp(p: {
     baseUrl,
     process: child,
     exited: child.exited,
+    logFile,
     waitReady: async (timeoutMs = 30_000) => {
       const deadline = Date.now() + timeoutMs;
 

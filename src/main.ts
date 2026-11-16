@@ -5,22 +5,11 @@ import { RoleRunner } from './app.module';
 import { createHttpApp } from './http-app';
 import { InFlightRequests } from './infrastructure/http/in-flight';
 import { ShutdownState } from './modules/health/readiness';
-import {
-  NoopFaultInjector,
-  ProcessKillFaultInjector,
-  type FaultPoint,
-} from './infrastructure/fault/fault-injector';
+import { parseFaultInjection } from './infrastructure/fault/fault-injector';
 import { MetricsServer } from './modules/observability/metrics-server';
 import { createPinoLogger } from './modules/observability/pino-logger';
 import { PrometheusMetrics } from './modules/observability/prometheus-metrics';
 
-const FAULT_POINTS: readonly FaultPoint[] = [
-  'after-ledger-insert',
-  'before-commit',
-  'after-commit-before-ack',
-  'after-claim-before-publish',
-  'after-publish-before-mark',
-];
 const HARD_STOP_MS = 28_000;
 
 const config = loadConfig(process.env);
@@ -28,7 +17,7 @@ const logger = createPinoLogger({
   level: process.env.LOG_LEVEL ?? 'info',
   instanceId: config.instanceId,
 });
-const faultPoint = FAULT_POINTS.find((point) => point === process.env.FAULT_INJECTION) ?? null;
+const faults = parseFaultInjection(process.env.FAULT_INJECTION);
 const metrics = new PrometheusMetrics();
 const metricsServer = new MetricsServer(metrics, config.metrics.port);
 const inFlight = new InFlightRequests();
@@ -37,7 +26,7 @@ const app = await createHttpApp(
     config,
     logger,
     metrics,
-    faults: faultPoint ? new ProcessKillFaultInjector(faultPoint) : new NoopFaultInjector(),
+    faults,
   },
   inFlight,
 );
@@ -51,10 +40,13 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, 'Shutdown started');
   const hardStop = setTimeout(() => {
     logger.error({ signal }, 'Shutdown exceeded the grace period');
+    logger.flush();
     process.exit(1);
   }, HARD_STOP_MS);
+  let exitCode = 0;
 
   try {
+    await faults.hit('during-shutdown');
     app.get(ShutdownState).begin();
     const [, httpDrained] = await Promise.all([
       app.get(RoleRunner).drain(),
@@ -70,10 +62,17 @@ async function shutdown(signal: string): Promise<void> {
     await app.close();
     metricsServer.stop();
     logger.info({ signal }, 'Shutdown complete');
+  } catch (error) {
+    exitCode = 1;
+    logger.error(
+      { signal, error: error instanceof Error ? error.message : String(error) },
+      'Shutdown failed',
+    );
   } finally {
     clearTimeout(hardStop);
   }
-  process.exit(0);
+  logger.flush();
+  process.exit(exitCode);
 }
 
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
@@ -85,6 +84,11 @@ if (config.roles.includes('api')) {
   await app.init();
 }
 logger.info(
-  { roles: config.roles, httpPort: config.http.port, metricsPort: config.metrics.port, faultPoint },
+  {
+    roles: config.roles,
+    httpPort: config.http.port,
+    metricsPort: config.metrics.port,
+    faultInjection: process.env.FAULT_INJECTION ?? null,
+  },
   'Instance started',
 );

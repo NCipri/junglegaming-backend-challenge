@@ -16,6 +16,7 @@ import {
   type FaultPoint,
 } from '../../../src/infrastructure/fault/fault-injector';
 import { redriveDlq } from '../../../src/modules/messaging/infrastructure/dlq-redrive';
+import { createSqsClient } from '../../../src/modules/messaging/infrastructure/sqs-client';
 import { SqsConsumer } from '../../../src/modules/messaging/infrastructure/sqs-consumer';
 import type { QueueUrls } from '../../../src/modules/messaging/infrastructure/sqs-topology';
 import { WagerMessageHandler } from '../../../src/modules/wagering/interface/wager-message.handler';
@@ -87,6 +88,7 @@ function consumer(
     urls?: QueueUrls;
     retryBaseSeconds?: number;
     visibilityTimeoutSeconds?: number;
+    heartbeatSeconds?: number;
   } = {},
 ) {
   const faults = opts.faults ?? new NoopFaultInjector();
@@ -106,7 +108,7 @@ function consumer(
       consumerName: 'wager-transactions',
       waitTimeSeconds: 1,
       visibilityTimeoutSeconds: opts.visibilityTimeoutSeconds ?? 30,
-      heartbeatSeconds: 10,
+      heartbeatSeconds: opts.heartbeatSeconds ?? 10,
       retryBaseSeconds: opts.retryBaseSeconds ?? 1,
       retryCapSeconds: 300,
       maxMessages: 10,
@@ -387,6 +389,79 @@ describe('SqsConsumer — transient errors, exhaustion and redrive', () => {
 
     expect(await balance(wallet.id)).toBe('75.00');
     expect(await count('wallet_ledger_entries', "direction = 'DEBIT'")).toBe(1);
+  }, 30_000);
+});
+
+describe('SqsConsumer — long polling', () => {
+  test('a long poll on an empty queue outlives the client request timeout without failing', async () => {
+    const shortTimeoutClient = createSqsClient({
+      endpoint: sqs.endpoint,
+      region: 'us-east-1',
+      connectTimeoutMs: 1000,
+      requestTimeoutMs: 1000,
+    });
+    const longPolling = new SqsConsumer(
+      shortTimeoutClient,
+      new WagerMessageHandler(),
+      app.processWager,
+      t.metrics,
+      new RecordingLogger(),
+      new UuidV7Generator(),
+      new NoopFaultInjector(),
+      {
+        queueUrl: queues.wagerUrl,
+        dlqUrl: queues.dlqUrl,
+        consumerName: 'wager-transactions',
+        waitTimeSeconds: 3,
+        visibilityTimeoutSeconds: 30,
+        heartbeatSeconds: 10,
+        retryBaseSeconds: 1,
+        retryCapSeconds: 300,
+        maxMessages: 10,
+      },
+    );
+    const startedAt = Date.now();
+
+    try {
+      expect(await longPolling.pollOnce()).toBe(0);
+      expect(Date.now() - startedAt).toBeGreaterThanOrEqual(2500);
+    } finally {
+      shortTimeoutClient.destroy();
+    }
+  }, 30_000);
+});
+
+describe('SqsConsumer — visibility of the whole batch', () => {
+  test('messages waiting behind a slow one in the same batch stay invisible to other consumers', async () => {
+    const wallet = await openWallet();
+    const holder = new Client({ connectionString: pg.migratorUrl });
+
+    await holder.connect();
+    await holder.query('BEGIN');
+    await holder.query('SELECT id FROM wallets WHERE id = $1 FOR UPDATE', [wallet.id]);
+    await send(message(wallet), queues, wallet.id);
+    await send(message(wallet), queues, wallet.id);
+    const slow = consumer({ visibilityTimeoutSeconds: 2, heartbeatSeconds: 1 });
+    const running = slow.pollOnce();
+    let stolen = 0;
+
+    try {
+      const peeker = consumer({ visibilityTimeoutSeconds: 2, heartbeatSeconds: 1 });
+      const deadline = Date.now() + 3500;
+
+      while (Date.now() < deadline) {
+        stolen += await peeker.pollOnce();
+      }
+    } finally {
+      await holder.query('ROLLBACK');
+      await holder.end();
+    }
+    const processedBySlow = await running;
+
+    expect(stolen).toBe(0);
+    expect(processedBySlow).toBe(2);
+    expect(await balance(wallet.id)).toBe('50.00');
+    expect(await depth(queues.wagerUrl)).toBe(0);
   }, 30_000);
 });
 

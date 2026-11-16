@@ -84,10 +84,13 @@ Invariants live **inside the classes**, with private state and explicit transiti
 
 - `PENDING` exists only in memory: the row is **born in its final state** (the status `CHECK` does not even accept `PENDING`).
 - `PROCESSED`, `REJECTED` and `FAILED` are terminal — also enforced by a trigger, which additionally refuses changes to immutable columns (provider, ids, key, hash, wallet, player, round, game, kind, amount, currency).
+- Transactions and wallets are **never deleted** (trigger, even for the schema owner), and a wallet's identity (`id`, `player_id`, `currency`, `created_at`) is immutable.
 
 ### `WalletLedgerEntry`
 
 Immutable (frozen at runtime), `amount > 0`, arithmetic checked by the factory and by a `CHECK` in the database. The ledger is **chained** by `wallet_version`: `UNIQUE (wallet_id, wallet_version)`, and each entry starts where the previous one ended — reconciliation detects any break.
+
+**Balance and ledger tied in the database:** `DEFERRABLE INITIALLY DEFERRED` constraint triggers check at `COMMIT` that the balance and version of every changed wallet equal the last entry's `balance_after` and `wallet_version` (or `0.00` at version 1 with no entries). A bug changing the balance without an entry — or the other way round — is refused at commit and the transaction becomes `FAILED`, with no partial state (also tested by mutation: with the entry INSERT removed, the bet becomes `FAILED` and the balance stays intact).
 
 ### `InboxMessage`, `OutboxMessage` and integration events
 
@@ -119,7 +122,7 @@ It is the challenge's preferred ORM and offers `em.transactional()`, `LockMode` 
 - Right after `BEGIN`: `lock_timeout = 5s`, `statement_timeout = 10s`, `idle_in_transaction_session_timeout = 30s` (transaction-local).
 - Retries by **error class**: transient → up to 3 attempts with jitter; uniqueness violation → rollback and re-run of the whole unit (up to 2 times); deterministic → thrown at once.
 - Cancellation through an `AbortSignal` (kills the database session ⇒ rollback), used during shutdown.
-- Client timeouts: connection and pool 5 s, query 15 s, SQS 5 s/10 s — with the database or SQS frozen, nothing hangs (tested with a paused Postgres: 503 in under 20 s).
+- Client timeouts: connection and pool 5 s, query 15 s, SQS 5 s/10 s (long polling uses wait + 5 s, per request) — with the database or SQS frozen, nothing hangs (tested with a paused Postgres: 503 in under 20 s).
 
 ### Database roles (least privilege)
 

@@ -431,6 +431,21 @@ describe('Queries', () => {
     });
   });
 
+  test('ListLedger gives no next cursor when the last page is exactly full (wallet opened at 0.00)', async () => {
+    const wallet = await openWallet('0.00');
+
+    for (let i = 0; i < 2; i++) {
+      await app.processWager.execute(
+        wagerCommand(wallet, { kind: WagerKind.Win, money: { amount: '5.00', currency: 'BRL' } }),
+        HTTP,
+      );
+    }
+    const page = await app.listLedger.execute(wallet.id, { limit: 2 });
+
+    expect(page.items.map((e) => e.walletVersion)).toEqual([3, 2]);
+    expect(page.nextCursor).toBeNull();
+  });
+
   test('ListLedger clamps the limit to 200 and rejects a bad limit', async () => {
     const wallet = await openWallet('1.00');
 

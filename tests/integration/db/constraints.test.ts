@@ -8,11 +8,23 @@ let pg: TestPostgres;
 let db: Client;
 let seq = 0;
 
+const LEDGER_MATCH_TRIGGERS = [
+  'ALTER TABLE wallets {0} TRIGGER wallets_match_ledger',
+  'ALTER TABLE wallet_ledger_entries {0} TRIGGER ledger_entries_match_wallet',
+];
+
+async function ledgerMatch(action: 'ENABLE' | 'DISABLE'): Promise<void> {
+  for (const statement of LEDGER_MATCH_TRIGGERS) {
+    await db.query(statement.replace('{0}', action));
+  }
+}
+
 beforeAll(async () => {
   pg = await startPostgres();
   await migrateUp(pg.migratorUrl);
   db = new PgClient({ connectionString: pg.migratorUrl });
   await db.connect();
+  await ledgerMatch('DISABLE');
 }, 120_000);
 
 afterAll(async () => {
@@ -499,6 +511,159 @@ describe('wallet_ledger_entries', () => {
       expect(error.code).toBe('P0001');
       expect(error.message).toContain('immutable');
     }
+  });
+});
+
+describe('permanence of wallets and transactions', () => {
+  test('a wager transaction can never be deleted, even by the schema owner', async () => {
+    const walletId = await wallet();
+    const id = await tx({ walletId });
+    const error = await failure('DELETE FROM wager_transactions WHERE id = $1', [id]);
+
+    expect(error.code).toBe('P0001');
+    expect(error.message).toContain('cannot be deleted');
+  });
+
+  test('a wallet can never be deleted', async () => {
+    const walletId = await wallet();
+    const error = await failure('DELETE FROM wallets WHERE id = $1', [walletId]);
+
+    expect(error.code).toBe('P0001');
+  });
+
+  test.each([
+    ['player_id', `'${'00000000-0000-7000-8000-000000000001'}'`],
+    ['currency', "'USD'"],
+    ['created_at', 'now()'],
+  ])('the wallet %s is immutable', async (column, value) => {
+    const walletId = await wallet();
+    const error = await failure(`UPDATE wallets SET ${column} = ${value} WHERE id = $1`, [
+      walletId,
+    ]);
+
+    expect(error.code).toBe('P0001');
+    expect(error.message).toContain('immutable');
+  });
+
+  test('balance, version and updated_at of a wallet can still change', async () => {
+    const walletId = await wallet();
+
+    await db.query(
+      'UPDATE wallets SET balance = 90.00, version = 2, updated_at = now() WHERE id = $1',
+      [walletId],
+    );
+  });
+});
+
+describe('wallet balance and version always match the ledger (checked at commit)', () => {
+  beforeAll(async () => {
+    await ledgerMatch('ENABLE');
+  });
+
+  afterAll(async () => {
+    await ledgerMatch('DISABLE');
+  });
+
+  async function inTransaction(work: () => Promise<void>): Promise<DatabaseError | null> {
+    await db.query('BEGIN');
+    try {
+      await work();
+      await db.query('COMMIT');
+
+      return null;
+    } catch (error) {
+      await db.query('ROLLBACK');
+
+      return error as DatabaseError;
+    }
+  }
+
+  test('a wallet opened at 0.00 with no entries is valid', async () => {
+    const walletId = await wallet({ balance: '0.00' });
+    const { rows } = await db.query<{ n: number }>(
+      'SELECT COUNT(*)::int AS n FROM wallets WHERE id = $1',
+      [walletId],
+    );
+
+    expect(rows[0]?.n).toBe(1);
+  });
+
+  test('a wallet with a balance but no ledger entry is refused at commit', async () => {
+    const error = await failure(
+      `INSERT INTO wallets (id, player_id, currency, balance, version, created_at, updated_at)
+       VALUES ($1, $2, 'BRL', '100.00', 1, $3, $3)`,
+      [uuid(), uuid(), NOW],
+    );
+
+    expect(error.code).toBe('P0001');
+    expect(error.message).toContain('does not match its ledger');
+  });
+
+  test('opening with a balance, its OPENING transaction and the CREDIT entry in one transaction is valid', async () => {
+    const walletId = uuid();
+    const error = await inTransaction(async () => {
+      await wallet({ id: walletId, balance: '100.00' });
+      const txId = await tx({ walletId, kind: 'WIN', amount: '100.00' });
+
+      await ledger({
+        walletId,
+        transactionId: txId,
+        direction: 'CREDIT',
+        amount: '100.00',
+        before: '0.00',
+        after: '100.00',
+        version: 1,
+      });
+    });
+
+    expect(error).toBeNull();
+  });
+
+  test('changing the balance without a ledger entry is refused at commit', async () => {
+    const walletId = await wallet({ balance: '0.00' });
+    const error = await failure("UPDATE wallets SET balance = '5.00' WHERE id = $1", [walletId]);
+
+    expect(error.code).toBe('P0001');
+    expect(error.message).toContain('does not match its ledger');
+  });
+
+  test('a ledger entry without the matching wallet update is refused at commit', async () => {
+    const walletId = await wallet({ balance: '0.00' });
+    const error = await inTransaction(async () => {
+      const txId = await tx({ walletId, kind: 'WIN', amount: '5.00' });
+
+      await ledger({
+        walletId,
+        transactionId: txId,
+        direction: 'CREDIT',
+        amount: '5.00',
+        before: '0.00',
+        after: '5.00',
+        version: 2,
+      });
+    });
+
+    expect(error?.code).toBe('P0001');
+  });
+
+  test('a debit that updates the wallet and adds the entry in one transaction is valid', async () => {
+    const walletId = await wallet({ balance: '0.00' });
+    const error = await inTransaction(async () => {
+      const txId = await tx({ walletId, kind: 'WIN', amount: '5.00' });
+
+      await db.query("UPDATE wallets SET balance = '5.00', version = 2 WHERE id = $1", [walletId]);
+      await ledger({
+        walletId,
+        transactionId: txId,
+        direction: 'CREDIT',
+        amount: '5.00',
+        before: '0.00',
+        after: '5.00',
+        version: 2,
+      });
+    });
+
+    expect(error).toBeNull();
   });
 });
 

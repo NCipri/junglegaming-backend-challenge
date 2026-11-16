@@ -46,6 +46,32 @@ test('single steps down revert only the latest migrations, one at a time', async
       return rows.map((row) => row.id);
     });
 
+  const permanenceTriggers = () =>
+    withClient(pg.migratorUrl, async (client) => {
+      const { rows } = await client.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM pg_trigger
+          WHERE tgname IN ('wallets_identity_guard', 'wallets_no_delete', 'wager_transactions_no_delete')`,
+      );
+
+      return rows[0]?.n ?? 0;
+    });
+
+  const ledgerMatchTriggers = () =>
+    withClient(pg.migratorUrl, async (client) => {
+      const { rows } = await client.query<{ n: number }>(
+        `SELECT COUNT(*)::int AS n FROM pg_trigger
+          WHERE tgname IN ('wallets_match_ledger', 'ledger_entries_match_wallet')`,
+      );
+
+      return rows[0]?.n ?? 0;
+    });
+
+  expect(await ledgerMatchTriggers()).toBe(2);
+  await migrateDown(pg.migratorUrl, 1);
+  expect(await ledgerMatchTriggers()).toBe(0);
+  expect(await permanenceTriggers()).toBe(3);
+  await migrateDown(pg.migratorUrl, 1);
+  expect(await permanenceTriggers()).toBe(0);
   expect(await outboxSeq()).toBe(1);
   await migrateDown(pg.migratorUrl, 1);
   expect(await outboxSeq()).toBe(0);
@@ -54,6 +80,8 @@ test('single steps down revert only the latest migrations, one at a time', async
   expect(await providers()).toEqual([]);
   await migrateUp(pg.migratorUrl);
   expect(await outboxSeq()).toBe(1);
+  expect(await permanenceTriggers()).toBe(3);
+  expect(await ledgerMatchTriggers()).toBe(2);
 });
 
 test('the seed migration registers the active providers', async () => {
