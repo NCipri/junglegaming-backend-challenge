@@ -1,0 +1,17 @@
+# Internal planning docs — not shipped (D-055)
+docs/
+
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Tooling
+.superpowers/
+*.log
+.DS_Store
