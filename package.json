@@ -19,7 +19,8 @@
     "migrate:down": "bun scripts/migrate.ts down",
     "sqs:init": "bun scripts/sqs-init.ts",
     "dlq:redrive": "bun scripts/dlq-redrive.ts",
-    "publish:wager": "bun scripts/publish-wager-message.ts"
+    "publish:wager": "bun scripts/publish-wager-message.ts",
+    "auth:token": "bun scripts/auth-token.ts"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "3.1169.0",
