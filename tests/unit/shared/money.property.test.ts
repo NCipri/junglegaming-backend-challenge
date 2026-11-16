@@ -1,9 +1,8 @@
-// Property-based tests: Money arithmetic is exact and reversible for any valid amounts.
 import { expect, test } from 'bun:test';
 import fc from 'fast-check';
 import { Money } from '../../../src/shared/money/money';
 
-const MAX_CENTS = 9_999_999_999_999_999_999n; // 99999999999999999.99
+const MAX_CENTS = 9_999_999_999_999_999_999n;
 
 const amount = fc.bigInt({ min: 0n, max: MAX_CENTS }).map((cents) => {
   const digits = cents.toString().padStart(3, '0');

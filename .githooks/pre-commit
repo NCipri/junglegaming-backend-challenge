@@ -1,6 +1,4 @@
 #!/bin/sh
-# Pre-commit guard: blocks commits that fail lint, typecheck or unit tests (D-060).
-# Enable once per clone with: git config core.hooksPath .githooks
 set -e
 bun run lint
 bun run typecheck

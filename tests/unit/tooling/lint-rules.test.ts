@@ -1,10 +1,7 @@
-// Verifies the project's ESLint guard rails: no number for money, pure domain layer.
 import { describe, expect, test } from 'bun:test';
 import { ESLint } from 'eslint';
 import tseslint from 'typescript-eslint';
 
-// Fixtures are linted as virtual files, so type-aware linting is disabled here;
-// every rule under test is syntactic and comes from the real eslint.config.js.
 const eslint = new ESLint({ overrideConfig: tseslint.configs.disableTypeChecked });
 
 async function ruleIds(code: string, filePath: string): Promise<string[]> {

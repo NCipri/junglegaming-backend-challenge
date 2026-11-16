@@ -1,5 +1,3 @@
-# Local stack: Postgres, MiniStack (SQS) and one-shot queue bootstrap.
-# App instances, nginx and Keycloak are added in later stages.
 name: wagering
 
 services:
@@ -7,7 +5,7 @@ services:
     image: postgres:17-alpine
     environment:
       POSTGRES_PASSWORD: postgres
-    ports: ['55432:5432'] # host 55432 avoids clashing with a local Postgres
+    ports: ['55432:5432']
     volumes:
       - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - pgdata:/var/lib/postgresql/data
@@ -22,7 +20,6 @@ services:
     image: ministackorg/ministack:1.5.41
     ports: ['4566:4566']
     healthcheck:
-      # The "Ready" log line precedes the HTTP listener; probe the health endpoint (spike).
       test:
         [
           'CMD',
@@ -35,7 +32,6 @@ services:
       retries: 30
 
   sqs-init:
-    # Needs `bun install` on the host first; switched to the app image in Etapa 16.
     image: oven/bun:1.4.4
     working_dir: /app
     volumes: ['.:/app:ro']

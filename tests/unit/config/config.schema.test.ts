@@ -1,4 +1,3 @@
-// Unit tests for environment configuration loading and validation.
 import { describe, expect, test } from 'bun:test';
 import { ConfigValidationError, loadConfig } from '../../../src/config/config.schema';
 

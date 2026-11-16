@@ -1,4 +1,3 @@
-// Unit tests for the Money value object: strict parsing, exact arithmetic, currency safety.
 import { describe, expect, test } from 'bun:test';
 import { CurrencyMismatchError, InvalidMoneyError } from '../../../src/shared/money/money.errors';
 import { Money } from '../../../src/shared/money/money';

@@ -1,4 +1,3 @@
-// Verifies the Nest ConfigModule exposes the validated AppConfig under APP_CONFIG.
 import { afterEach, expect, test } from 'bun:test';
 import { NestFactory } from '@nestjs/core';
 import { APP_CONFIG, ConfigModule } from '../../../src/config/config.module';

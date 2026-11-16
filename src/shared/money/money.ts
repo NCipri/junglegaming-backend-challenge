@@ -7,12 +7,9 @@ export interface MoneyProps {
   currency: string;
 }
 
-// Private Decimal flavour: generous precision and never exponential notation.
 const Exact = Decimal.clone({ precision: 40, toExpNeg: -40, toExpPos: 40 });
 
-/** Exactly two decimals, no sign, no leading zeros, at most NUMERIC(19,2) magnitude. */
 const VALID_AMOUNT = /^(0|[1-9]\d{0,16})\.\d{2}$/;
-/** A well-formed unsigned decimal whose only defect is the number of decimals. */
 const WRONG_SCALE = /^(0|[1-9]\d*)(\.\d+)?$/;
 const TWO_DECIMALS = /\.\d{2}$/;
 const VALID_CURRENCY = /^[A-Z]{3}$/;
@@ -86,7 +83,6 @@ export class Money {
   }
 
   private formatAmount(): string {
-    // Values only ever carry 2 decimals, so toFixed(2) never rounds (decimal.js prints -0 as "0.00").
     return this.value.toFixed(2);
   }
 

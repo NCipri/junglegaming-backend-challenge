@@ -1,4 +1,3 @@
-# Bun runtime and test runner configuration.
 [test]
 preload = ["reflect-metadata"]
 timeout = 30000

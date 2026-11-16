@@ -1,4 +1,3 @@
-// Unit tests for the system clock and UUIDv7 id generator ports.
 import { expect, test } from 'bun:test';
 import { UuidV7Generator } from '../../../src/shared/ids/id-generator';
 import { SystemClock } from '../../../src/shared/time/clock';

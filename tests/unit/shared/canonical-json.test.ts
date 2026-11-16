@@ -1,4 +1,3 @@
-// Unit tests for canonical JSON serialization and SHA-256 hashing.
 import { expect, test } from 'bun:test';
 import { canonicalJson, sha256Hex } from '../../../src/shared/hashing/canonical-json';
 

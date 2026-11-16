@@ -1,4 +1,3 @@
-// ESLint flat config: type-aware TypeScript rules plus money and domain guard rails.
 import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';

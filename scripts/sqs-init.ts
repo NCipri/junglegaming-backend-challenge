@@ -1,4 +1,3 @@
-// Creates the SQS queues and DLQ redrive policy; safe to run repeatedly.
 import {
   CreateQueueCommand,
   GetQueueAttributesCommand,
@@ -6,7 +5,7 @@ import {
   SQSClient,
 } from '@aws-sdk/client-sqs';
 
-const MAX_RECEIVE_COUNT = 8; // D-047 / D-058
+const MAX_RECEIVE_COUNT = 8;
 
 const client = new SQSClient({
   endpoint: process.env.SQS_ENDPOINT ?? 'http://localhost:4566',

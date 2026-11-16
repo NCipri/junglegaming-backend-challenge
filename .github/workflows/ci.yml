@@ -1,4 +1,3 @@
-# CI: lint, typecheck and unit tests. Integration and concurrency jobs are added in Etapa 16.
 name: ci
 on:
   push:
