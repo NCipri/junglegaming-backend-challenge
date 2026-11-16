@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import type { AppOptions } from './app.module.types';
 import { correlationMiddleware } from './infrastructure/http/correlation';
 import { jsonBodyMiddleware } from './infrastructure/http/json-body';
+import { requestLogMiddleware } from './infrastructure/http/request-log';
 import { NoopLogger } from './modules/observability/logger.port';
 import { UuidV7Generator } from './shared/ids/id-generator';
 
@@ -15,8 +16,11 @@ export async function createHttpApp(options: AppOptions): Promise<NestExpressApp
   });
 
   app.disable('x-powered-by');
+  const logger = options.logger ?? new NoopLogger();
+
   app.use(correlationMiddleware(new UuidV7Generator(), options.config.instanceId));
-  app.use(jsonBodyMiddleware(options.logger ?? new NoopLogger()));
+  app.use(requestLogMiddleware(logger));
+  app.use(jsonBodyMiddleware(logger));
   app.enableShutdownHooks();
 
   return app;

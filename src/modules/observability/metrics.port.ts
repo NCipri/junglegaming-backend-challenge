@@ -2,6 +2,7 @@
 export type CounterName =
   | 'wager_transactions_total'
   | 'idempotent_replays_total'
+  | 'idempotency_conflicts_total'
   | 'inbox_duplicates_total'
   | 'inbox_payload_conflict_total'
   | 'processing_retries_total'

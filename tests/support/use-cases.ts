@@ -90,6 +90,7 @@ export function createUseCases(
       clock,
       t.metrics,
       faults,
+      logger,
     ),
     getWallet: new GetWallet(runner),
     listLedger: new ListLedger(runner),

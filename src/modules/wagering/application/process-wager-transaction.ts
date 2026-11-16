@@ -8,6 +8,7 @@ import { Money } from '../../../shared/money/money';
 import type { Clock } from '../../../shared/time/clock';
 import type { EventFactory } from '../../messaging/domain/event-factory';
 import { InboxMessage } from '../../messaging/domain/inbox-message';
+import type { AppLogger } from '../../observability/logger.port';
 import type { MetricsPort } from '../../observability/metrics.port';
 import { FailureCode } from '../domain/failure-code';
 import { computeWagerPayloadHash } from '../domain/payload-hash';
@@ -27,6 +28,7 @@ export class ProcessWagerTransaction {
     private readonly clock: Clock,
     private readonly metrics: MetricsPort,
     private readonly faults: FaultInjector,
+    private readonly logger: AppLogger,
   ) {}
 
   async execute(
@@ -35,6 +37,64 @@ export class ProcessWagerTransaction {
     opts: { signal?: AbortSignal } = {},
   ): Promise<WagerResult> {
     const startedAt = performance.now();
+    const context = {
+      correlationId: cmd.correlationId,
+      ...(channel.type === 'SQS' ? { messageId: channel.messageId } : {}),
+      channel: channel.type,
+      walletId: cmd.walletId,
+      providerId: cmd.providerId,
+      externalTransactionId: cmd.externalTransactionId,
+      kind: cmd.kind,
+    };
+
+    try {
+      const result = await this.dispatch(cmd, channel, opts);
+      const durationMs = Math.round(performance.now() - startedAt);
+
+      if (result.type === 'RESULT') {
+        this.logger.info(
+          {
+            ...context,
+            transactionId: result.view.transactionId,
+            status: result.view.status,
+            ...(result.view.failureCode !== undefined
+              ? { failureCode: result.view.failureCode }
+              : {}),
+            replay: result.replay,
+            durationMs,
+          },
+          'Wager transaction processed',
+        );
+      } else {
+        this.logger.warn(
+          { ...context, outcome: result.type, durationMs },
+          'Wager transaction not processed',
+        );
+      }
+
+      return result;
+    } catch (error) {
+      this.logger.warn(
+        {
+          ...context,
+          error: error instanceof Error ? error.name : 'Unknown',
+          durationMs: Math.round(performance.now() - startedAt),
+        },
+        'Wager transaction failed to complete',
+      );
+      throw error;
+    } finally {
+      this.metrics.observe('processing_duration_seconds', (performance.now() - startedAt) / 1000, {
+        channel: channel.type,
+      });
+    }
+  }
+
+  private async dispatch(
+    cmd: WagerCommand,
+    channel: WagerChannel,
+    opts: { signal?: AbortSignal },
+  ): Promise<WagerResult> {
     const payloadHash = computeWagerPayloadHash({
       ...cmd,
       referenceExternalTransactionId: cmd.referenceExternalTransactionId ?? null,
@@ -64,10 +124,6 @@ export class ProcessWagerTransaction {
       }
 
       return this.recordFailure(cmd, channel, payloadHash, build);
-    } finally {
-      this.metrics.observe('processing_duration_seconds', (performance.now() - startedAt) / 1000, {
-        channel: channel.type,
-      });
     }
   }
 
@@ -180,6 +236,8 @@ export class ProcessWagerTransaction {
     channel: WagerChannel,
   ): WagerResult {
     if (!existing.matchesPayload(payloadHash)) {
+      this.metrics.increment('idempotency_conflicts_total', { channel: channel.type });
+
       return { type: 'IDEMPOTENCY_CONFLICT' };
     }
     this.metrics.increment('idempotent_replays_total', { channel: channel.type });

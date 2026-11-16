@@ -57,7 +57,10 @@ export function testConfig(env: Record<string, string>): AppConfig {
   });
 }
 
-export async function startTestApi(overrides: Partial<AppOptions> = {}): Promise<TestApi> {
+export async function startTestApi(
+  overrides: Partial<AppOptions> = {},
+  opts: { roles?: string; env?: Record<string, string> } = {},
+): Promise<TestApi> {
   const [pg, sqs, issuer] = await Promise.all([startPostgres(), startSqs(), startTestIssuer()]);
 
   await migrateUp(pg.migratorUrl);
@@ -70,6 +73,11 @@ export async function startTestApi(overrides: Partial<AppOptions> = {}): Promise
     SQS_WAGER_DLQ_URL: queues.dlqUrl,
     SQS_EVENTS_QUEUE_URL: queues.eventsUrl,
     AUTH_JWKS_URL: issuer.jwksUrl,
+    APP_ROLES: opts.roles ?? 'api',
+    SQS_WAIT_TIME_SECONDS: '1',
+    OUTBOX_POLL_MS: '100',
+    PENDING_POLL_MS: '100',
+    ...opts.env,
   });
   const metrics = new InMemoryMetrics();
   const logger = new RecordingLogger();

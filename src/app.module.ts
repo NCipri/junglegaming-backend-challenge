@@ -2,7 +2,9 @@
 import {
   Inject,
   Module,
+  type BeforeApplicationShutdown,
   type DynamicModule,
+  type OnApplicationBootstrap,
   type OnApplicationShutdown,
   type Provider,
 } from '@nestjs/common';
@@ -22,10 +24,17 @@ import { JwtProviderIdentity } from './modules/identity/jwks-key-source';
 import { JwtAuthGuard } from './modules/identity/jwt-auth.guard';
 import { PROVIDER_IDENTITY } from './modules/identity/provider-identity.port';
 import { EventFactory } from './modules/messaging/domain/event-factory';
+import { OutboxRelay } from './modules/messaging/infrastructure/outbox-relay';
 import { createSqsClient } from './modules/messaging/infrastructure/sqs-client';
+import { SqsConsumer } from './modules/messaging/infrastructure/sqs-consumer';
+import { SqsEventPublisher } from './modules/messaging/infrastructure/sqs-event-publisher';
+import { DlqDepthCollector } from './modules/observability/dlq-depth.collector';
 import { NoopLogger, type AppLogger } from './modules/observability/logger.port';
 import { NoopMetrics, type MetricsPort } from './modules/observability/metrics.port';
 import { GetTransaction } from './modules/wagering/application/get-transaction';
+import { PendingReferenceWorker } from './modules/wagering/application/pending-reference.worker';
+import { ResolvePendingReference } from './modules/wagering/application/resolve-pending-reference';
+import { WagerMessageHandler } from './modules/wagering/interface/wager-message.handler';
 import { ProcessWagerTransaction } from './modules/wagering/application/process-wager-transaction';
 import { WagerProcessor } from './modules/wagering/application/wager-processor';
 import { ProvidersController } from './modules/wagering/interface/providers.controller';
@@ -48,6 +57,42 @@ class ResourceCloser implements OnApplicationShutdown {
   async onApplicationShutdown(): Promise<void> {
     this.sqs.destroy();
     await this.orm.close(true);
+  }
+}
+
+class RoleRunner implements OnApplicationBootstrap, BeforeApplicationShutdown {
+  constructor(
+    @Inject(APP_SETTINGS) private readonly config: AppConfig,
+    @Inject(ShutdownState) private readonly state: ShutdownState,
+    @Inject(SqsConsumer) private readonly consumer: SqsConsumer,
+    @Inject(OutboxRelay) private readonly relay: OutboxRelay,
+    @Inject(PendingReferenceWorker) private readonly worker: PendingReferenceWorker,
+    @Inject(DlqDepthCollector) private readonly dlqDepth: DlqDepthCollector,
+  ) {}
+
+  onApplicationBootstrap(): void {
+    const roles = new Set(this.config.roles);
+
+    if (roles.has('sqs-consumer')) {
+      this.consumer.start();
+      this.dlqDepth.start();
+    }
+    if (roles.has('outbox-relay')) {
+      this.relay.start();
+    }
+    if (roles.has('pending-reference-worker')) {
+      this.worker.start();
+    }
+  }
+
+  async beforeApplicationShutdown(): Promise<void> {
+    this.state.begin();
+    this.dlqDepth.stop();
+    await Promise.all([
+      this.consumer.stop({ graceMs: this.config.shutdown.graceMs }),
+      this.relay.stop(),
+      this.worker.stop(),
+    ]);
   }
 }
 
@@ -122,7 +167,7 @@ function providers(options: AppOptions): Provider[] {
     ),
     factory(
       ProcessWagerTransaction,
-      [WalletTransactionRunner, WagerProcessor, EventFactory, IDS, CLOCK, METRICS, FAULTS],
+      [WalletTransactionRunner, WagerProcessor, EventFactory, IDS, CLOCK, METRICS, FAULTS, LOGGER],
       (
         runner: WalletTransactionRunner,
         processor: WagerProcessor,
@@ -131,7 +176,9 @@ function providers(options: AppOptions): Provider[] {
         clock: Clock,
         metrics: MetricsPort,
         faults: FaultInjector,
-      ) => new ProcessWagerTransaction(runner, processor, events, ids, clock, metrics, faults),
+        logger: AppLogger,
+      ) =>
+        new ProcessWagerTransaction(runner, processor, events, ids, clock, metrics, faults, logger),
     ),
     factory(
       OpenWallet,
@@ -184,6 +231,102 @@ function providers(options: AppOptions): Provider[] {
           metrics,
         ),
     ),
+    factory(
+      ResolvePendingReference,
+      [WalletTransactionRunner, WagerProcessor, CLOCK],
+      (runner: WalletTransactionRunner, processor: WagerProcessor, clock: Clock) =>
+        new ResolvePendingReference(runner, processor, clock, {
+          retryBaseMs: config.pending.retryBaseMs,
+          retryCapMs: config.pending.retryCapMs,
+        }),
+    ),
+    factory(
+      PendingReferenceWorker,
+      [WalletTransactionRunner, ResolvePendingReference, CLOCK, LOGGER],
+      (
+        runner: WalletTransactionRunner,
+        resolve: ResolvePendingReference,
+        clock: Clock,
+        logger: AppLogger,
+      ) =>
+        new PendingReferenceWorker(runner, resolve, clock, logger, {
+          instanceId: config.instanceId,
+          leaseMs: config.pending.leaseMs,
+          pollMs: config.pending.pollMs,
+          batchSize: config.pending.batchSize,
+          concurrency: 4,
+        }),
+    ),
+    factory(
+      OutboxRelay,
+      [WalletTransactionRunner, SQS_CLIENT, METRICS, CLOCK, FAULTS, LOGGER],
+      (
+        runner: WalletTransactionRunner,
+        sqs: SQSClient,
+        metrics: MetricsPort,
+        clock: Clock,
+        faults: FaultInjector,
+        logger: AppLogger,
+      ) =>
+        new OutboxRelay(
+          runner,
+          new SqsEventPublisher(sqs, config.sqs.eventsQueueUrl),
+          metrics,
+          clock,
+          faults,
+          logger,
+          {
+            instanceId: config.instanceId,
+            leaseMs: config.outbox.leaseMs,
+            pollMs: config.outbox.pollMs,
+            batchSize: config.outbox.batchSize,
+            retryBaseMs: config.outbox.retryBaseMs,
+            retryCapMs: config.outbox.retryCapMs,
+          },
+        ),
+    ),
+    factory(
+      SqsConsumer,
+      [SQS_CLIENT, ProcessWagerTransaction, METRICS, LOGGER, IDS, FAULTS],
+      (
+        sqs: SQSClient,
+        processWager: ProcessWagerTransaction,
+        metrics: MetricsPort,
+        logger: AppLogger,
+        ids: IdGenerator,
+        faults: FaultInjector,
+      ) =>
+        new SqsConsumer(
+          sqs,
+          new WagerMessageHandler(),
+          processWager,
+          metrics,
+          logger,
+          ids,
+          faults,
+          {
+            queueUrl: config.sqs.wagerQueueUrl,
+            dlqUrl: config.sqs.wagerDlqUrl,
+            consumerName: 'wager-transactions',
+            waitTimeSeconds: config.sqs.waitTimeSeconds,
+            visibilityTimeoutSeconds: config.sqs.visibilityTimeoutSeconds,
+            heartbeatSeconds: config.sqs.heartbeatSeconds,
+            retryBaseSeconds: config.sqs.retryBaseSeconds,
+            retryCapSeconds: config.sqs.retryCapSeconds,
+            maxMessages: 10,
+          },
+        ),
+    ),
+    factory(
+      DlqDepthCollector,
+      [SQS_CLIENT, METRICS, LOGGER],
+      (sqs: SQSClient, metrics: MetricsPort, logger: AppLogger) =>
+        new DlqDepthCollector(sqs, config.sqs.wagerDlqUrl, metrics, logger, {
+          intervalMs: 15_000,
+          timeoutMs: config.health.timeoutMs,
+        }),
+    ),
+    RoleRunner,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     factory(APP_FILTER, [LOGGER], (logger: AppLogger) => new ProblemDetailsFilter(logger)),
   ];
