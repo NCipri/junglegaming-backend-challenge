@@ -23,29 +23,35 @@ export class Money {
   static from(props: MoneyProps): Money {
     Money.assertCurrency(props.currency);
     const { amount } = props;
+
     if (typeof amount !== 'string' || !VALID_AMOUNT.test(amount)) {
       const scaleOnly =
         typeof amount === 'string' && WRONG_SCALE.test(amount) && !TWO_DECIMALS.test(amount);
+
       throw new InvalidMoneyError(
         scaleOnly ? 'INVALID_AMOUNT_SCALE' : 'INVALID_AMOUNT_FORMAT',
         `Invalid amount: expected a decimal string with exactly 2 decimals`,
       );
     }
+
     return new Money(new Exact(amount), props.currency);
   }
 
   static zero(currency: string): Money {
     Money.assertCurrency(currency);
+
     return new Money(new Exact(0), currency);
   }
 
   add(other: Money): Money {
     this.assertSameCurrency(other);
+
     return new Money(this.value.plus(other.value), this.currency);
   }
 
   subtract(other: Money): Money {
     this.assertSameCurrency(other);
+
     return new Money(this.value.minus(other.value), this.currency);
   }
 
@@ -67,6 +73,7 @@ export class Money {
 
   isLessThan(other: Money): boolean {
     this.assertSameCurrency(other);
+
     return this.value.lessThan(other.value);
   }
 

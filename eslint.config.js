@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import stylistic from '@stylistic/eslint-plugin';
 import prettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
@@ -63,4 +64,17 @@ export default tseslint.config(
     },
   },
   prettier,
+  {
+    files: ['**/*.{ts,js}'],
+    plugins: { '@stylistic': stylistic },
+    rules: {
+      curly: ['error', 'all'],
+      '@stylistic/padding-line-between-statements': [
+        'error',
+        { blankLine: 'always', prev: ['const', 'let', 'var'], next: '*' },
+        { blankLine: 'any', prev: ['const', 'let', 'var'], next: ['const', 'let', 'var'] },
+        { blankLine: 'always', prev: '*', next: 'return' },
+      ],
+    },
+  },
 );

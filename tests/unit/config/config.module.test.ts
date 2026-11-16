@@ -4,6 +4,7 @@ import { APP_CONFIG, ConfigModule } from '../../../src/config/config.module';
 import type { AppConfig } from '../../../src/config/config.schema';
 
 const saved = { ...process.env };
+
 afterEach(() => {
   process.env = { ...saved };
 });
@@ -24,6 +25,7 @@ test('provides the AppConfig loaded from process.env', async () => {
     INSTANCE_ID: 'app-test',
   });
   const app = await NestFactory.createApplicationContext(ConfigModule, { logger: false });
+
   try {
     expect(app.get<AppConfig>(APP_CONFIG).instanceId).toBe('app-test');
   } finally {

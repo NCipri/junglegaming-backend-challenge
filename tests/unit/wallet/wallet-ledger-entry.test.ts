@@ -24,6 +24,7 @@ describe('WalletLedgerEntry.create', () => {
       balanceBefore: brl('100.00'),
       balanceAfter: brl('75.00'),
     });
+
     expect(entry.isBalanced()).toBe(true);
     expect(entry.balanceAfter.toJSON().amount).toBe('75.00');
     expect(entry.walletVersion).toBe(2);
@@ -37,6 +38,7 @@ describe('WalletLedgerEntry.create', () => {
       balanceBefore: brl('100.00'),
       balanceAfter: brl('125.00'),
     });
+
     expect(entry.isBalanced()).toBe(true);
   });
 
@@ -100,6 +102,7 @@ describe('WalletLedgerEntry.create', () => {
       });
     } catch (error) {
       expect((error as UnbalancedLedgerEntryError).code).toBe('LEDGER_UNBALANCED');
+
       return;
     }
     throw new Error('expected an error');
@@ -115,6 +118,7 @@ describe('WalletLedgerEntry.rehydrate', () => {
       balanceBefore: brl('100.00'),
       balanceAfter: brl('80.00'),
     });
+
     expect(entry.isBalanced()).toBe(false);
     expect(entry.id).toBe('entry-1');
   });
@@ -127,6 +131,7 @@ describe('WalletLedgerEntry.rehydrate', () => {
       balanceBefore: brl('0.00'),
       balanceAfter: brl('1.00'),
     });
+
     expect(Object.isFrozen(entry)).toBe(true);
   });
 });

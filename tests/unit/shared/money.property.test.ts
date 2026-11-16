@@ -6,6 +6,7 @@ const MAX_CENTS = 9_999_999_999_999_999_999n;
 
 const amount = fc.bigInt({ min: 0n, max: MAX_CENTS }).map((cents) => {
   const digits = cents.toString().padStart(3, '0');
+
   return Money.from({ amount: `${digits.slice(0, -2)}.${digits.slice(-2)}`, currency: 'BRL' });
 });
 

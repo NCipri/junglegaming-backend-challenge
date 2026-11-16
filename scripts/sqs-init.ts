@@ -19,7 +19,11 @@ async function createQueue(name: string): Promise<string> {
   const { QueueUrl } = await client.send(
     new CreateQueueCommand({ QueueName: name, Attributes: fifo }),
   );
-  if (!QueueUrl) throw new Error(`Queue ${name} has no URL`);
+
+  if (!QueueUrl) {
+    throw new Error(`Queue ${name} has no URL`);
+  }
+
   return QueueUrl;
 }
 
@@ -28,12 +32,17 @@ async function queueArn(queueUrl: string): Promise<string> {
     new GetQueueAttributesCommand({ QueueUrl: queueUrl, AttributeNames: ['QueueArn'] }),
   );
   const arn = Attributes?.QueueArn;
-  if (!arn) throw new Error(`Queue ${queueUrl} has no ARN`);
+
+  if (!arn) {
+    throw new Error(`Queue ${queueUrl} has no ARN`);
+  }
+
   return arn;
 }
 
 const dlqUrl = await createQueue('wager-transactions-dlq.fifo');
 const wagerUrl = await createQueue('wager-transactions.fifo');
+
 await client.send(
   new SetQueueAttributesCommand({
     QueueUrl: wagerUrl,
@@ -47,4 +56,6 @@ await client.send(
 );
 const eventsUrl = await createQueue('wallet-events.fifo');
 
-for (const url of [wagerUrl, dlqUrl, eventsUrl]) console.log(url);
+for (const url of [wagerUrl, dlqUrl, eventsUrl]) {
+  console.log(url);
+}

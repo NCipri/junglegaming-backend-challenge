@@ -6,6 +6,7 @@ const eslint = new ESLint({ overrideConfig: tseslint.configs.disableTypeChecked 
 
 async function ruleIds(code: string, filePath: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath });
+
   return (result?.messages ?? []).map((m) => m.ruleId ?? 'parse-error');
 }
 
@@ -68,5 +69,37 @@ describe('domain purity', () => {
 
 test('a clean file has no findings', async () => {
   const clean = 'export const total = (a: string, b: string): string => `${a}${b}`;\n';
+
   expect(await ruleIds(clean, moneyFile)).toEqual([]);
+});
+
+describe('code layout', () => {
+  const file = 'src/shared/fixture.ts';
+
+  test('requires braces on every if', async () => {
+    const code = 'export function f(a: boolean): number {\n  if (a) return 1;\n\n  return 2;\n}\n';
+
+    expect(await ruleIds(code, file)).toContain('curly');
+  });
+
+  test('requires a blank line after variable declarations', async () => {
+    const code =
+      'export function f(a: number): number {\n  const b = a * 2;\n  if (b > 2) {\n    return b;\n  }\n\n  return a;\n}\n';
+
+    expect(await ruleIds(code, file)).toContain('@stylistic/padding-line-between-statements');
+  });
+
+  test('requires a blank line before return', async () => {
+    const code =
+      'export function f(a: number): number {\n  if (a > 2) {\n    return a;\n  }\n  return 0;\n}\n';
+
+    expect(await ruleIds(code, file)).toContain('@stylistic/padding-line-between-statements');
+  });
+
+  test('accepts the expected layout', async () => {
+    const code =
+      'export function f(a: number): number {\n  const b = a * 2;\n\n  if (b > 2) {\n    return b;\n  }\n\n  return a;\n}\n';
+
+    expect(await ruleIds(code, file)).toEqual([]);
+  });
 });

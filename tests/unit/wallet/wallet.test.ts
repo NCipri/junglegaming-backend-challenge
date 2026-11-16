@@ -27,6 +27,7 @@ function openWith(amount: string) {
 describe('Wallet.open', () => {
   test('opens with the initial balance at version 1 and an opening credit entry', () => {
     const { wallet, openingEntry } = openWith('1000.00');
+
     expect(wallet.balance.toJSON()).toEqual({ amount: '1000.00', currency: 'BRL' });
     expect(wallet.version).toBe(1);
     expect(wallet.currency).toBe('BRL');
@@ -46,6 +47,7 @@ describe('Wallet.open', () => {
       initialBalance: brl('0.00'),
       at: t0,
     });
+
     expect(openingEntry).toBeNull();
     expect(wallet.version).toBe(1);
     expect(wallet.balance.isZero()).toBe(true);
@@ -78,6 +80,7 @@ describe('Wallet.debit', () => {
       entryId: 'e-1',
       at: t1,
     });
+
     expect(wallet.balance.toJSON().amount).toBe('20.00');
     expect(wallet.version).toBe(2);
     expect(wallet.updatedAt).toEqual(t1);
@@ -91,6 +94,7 @@ describe('Wallet.debit', () => {
 
   test('rejects an overdraft and leaves the state untouched', () => {
     const { wallet } = openWith('100.00');
+
     wallet.debit({ money: brl('80.00'), transactionId: 'bet-1', entryId: 'e-1', at: t1 });
     expect(() =>
       wallet.debit({ money: brl('80.00'), transactionId: 'bet-2', entryId: 'e-2', at: t1 }),
@@ -101,12 +105,14 @@ describe('Wallet.debit', () => {
 
   test('allows debiting the exact balance down to zero', () => {
     const { wallet } = openWith('80.00');
+
     wallet.debit({ money: brl('80.00'), transactionId: 'bet-1', entryId: 'e-1', at: t1 });
     expect(wallet.balance.isZero()).toBe(true);
   });
 
   test('rejects a zero amount and leaves the state untouched', () => {
     const { wallet } = openWith('100.00');
+
     expect(() =>
       wallet.debit({ money: brl('0.00'), transactionId: 'bet-1', entryId: 'e-1', at: t1 }),
     ).toThrow(UnbalancedLedgerEntryError);
@@ -124,6 +130,7 @@ describe('Wallet.credit', () => {
       entryId: 'e-1',
       at: t1,
     });
+
     expect(wallet.balance.toJSON().amount).toBe('150.00');
     expect(wallet.version).toBe(2);
     expect(entry.direction).toBe(LedgerDirection.Credit);
@@ -132,6 +139,7 @@ describe('Wallet.credit', () => {
 
   test('rejects another currency and leaves the state untouched', () => {
     const { wallet } = openWith('100.00');
+
     expect(() =>
       wallet.credit({ money: usd('10.00'), transactionId: 'win-1', entryId: 'e-1', at: t1 }),
     ).toThrow(CurrencyMismatchError);
@@ -143,12 +151,14 @@ describe('Wallet.credit', () => {
 describe('Wallet.canDebit', () => {
   test('tells whether a debit fits the balance', () => {
     const { wallet } = openWith('100.00');
+
     expect(wallet.canDebit(brl('100.00'))).toBe(true);
     expect(wallet.canDebit(brl('100.01'))).toBe(false);
   });
 
   test('rejects another currency', () => {
     const { wallet } = openWith('100.00');
+
     expect(() => wallet.canDebit(usd('1.00'))).toThrow(CurrencyMismatchError);
   });
 });
@@ -156,8 +166,10 @@ describe('Wallet.canDebit', () => {
 describe('Wallet.rehydrate', () => {
   test('round-trips every field through toState', () => {
     const { wallet } = openWith('100.00');
+
     wallet.debit({ money: brl('30.00'), transactionId: 'bet-1', entryId: 'e-1', at: t1 });
     const copy = Wallet.rehydrate(wallet.toState());
+
     expect(copy.toState()).toEqual(wallet.toState());
     expect(copy.id).toBe('wallet-1');
     expect(copy.playerId).toBe('player-1');
@@ -169,6 +181,7 @@ describe('Wallet.rehydrate', () => {
   test('does not share mutable state with the source', () => {
     const { wallet } = openWith('100.00');
     const copy = Wallet.rehydrate(wallet.toState());
+
     copy.debit({ money: brl('10.00'), transactionId: 'bet-1', entryId: 'e-1', at: t1 });
     expect(wallet.balance.toJSON().amount).toBe('100.00');
   });

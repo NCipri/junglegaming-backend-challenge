@@ -10,6 +10,7 @@ function codeOf(fn: () => unknown): string | undefined {
   } catch (error) {
     return error instanceof InvalidMoneyError ? error.code : 'OTHER_ERROR';
   }
+
   return undefined;
 }
 
@@ -65,6 +66,7 @@ describe('Money arithmetic', () => {
 
   test('subtracts into a negative result without rounding', () => {
     const result = brl('20.00').subtract(brl('80.00'));
+
     expect(result.toJSON().amount).toBe('-60.00');
     expect(result.isNegative()).toBe(true);
   });
@@ -83,12 +85,14 @@ describe('Money arithmetic', () => {
 
   test('is immutable: operations return new instances', () => {
     const a = brl('10.00');
+
     a.add(brl('5.00'));
     expect(a.toJSON().amount).toBe('10.00');
   });
 
   test('rejects mixing currencies', () => {
     const usd = Money.from({ amount: '1.00', currency: 'USD' });
+
     expect(() => brl('1.00').add(usd)).toThrow(CurrencyMismatchError);
     expect(() => brl('1.00').subtract(usd)).toThrow(CurrencyMismatchError);
     expect(() => brl('1.00').isLessThan(usd)).toThrow(CurrencyMismatchError);
@@ -105,6 +109,7 @@ describe('Money queries and formatting', () => {
 
   test('a negated zero is zero, not negative', () => {
     const negatedZero = Money.zero('BRL').negate();
+
     expect(negatedZero.isZero()).toBe(true);
     expect(negatedZero.isNegative()).toBe(false);
   });

@@ -125,10 +125,12 @@ function toAppConfig(env: z.infer<typeof envSchema>) {
 
 export function loadConfig(env: Record<string, string | undefined>): AppConfig {
   const parsed = envSchema.safeParse(env);
+
   if (!parsed.success) {
     throw new ConfigValidationError(
       parsed.error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`),
     );
   }
+
   return toAppConfig(parsed.data);
 }

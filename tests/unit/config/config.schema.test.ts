@@ -36,6 +36,7 @@ describe('loadConfig', () => {
 
   test('applies the documented defaults for db, sqs, outbox, pending, shutdown and health', () => {
     const config = loadConfig(validEnv);
+
     expect(config.db).toEqual({
       poolSize: 10,
       connectTimeoutMs: 5000,
@@ -84,6 +85,7 @@ describe('loadConfig', () => {
 
   test('exposes the connection, queue and auth settings', () => {
     const config = loadConfig(validEnv);
+
     expect(config.databaseUrl).toBe(validEnv.DATABASE_URL);
     expect(config.databaseMigratorUrl).toBe(validEnv.DATABASE_MIGRATOR_URL);
     expect(config.sqs.wagerQueueUrl).toBe(validEnv.SQS_WAGER_QUEUE_URL);

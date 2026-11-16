@@ -4,31 +4,7 @@ import { Money } from '../../../shared/money/money';
 import { LedgerDirection } from './ledger-direction';
 import { WalletLedgerEntry } from './wallet-ledger-entry';
 import { InsufficientBalanceError, InvalidWalletOpeningError } from './wallet.errors';
-
-export interface WalletState {
-  id: string;
-  playerId: string;
-  currency: string;
-  balance: Money;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface BalanceMovement {
-  money: Money;
-  transactionId: string;
-  entryId: string;
-  at: Date;
-}
-
-export interface OpenWalletProps {
-  id: string;
-  playerId: string;
-  initialBalance: Money;
-  at: Date;
-  opening?: { transactionId: string; entryId: string };
-}
+import type { BalanceMovement, OpenWalletProps, WalletState } from './wallet.types';
 
 export class Wallet {
   private constructor(
@@ -43,6 +19,7 @@ export class Wallet {
 
   static open(props: OpenWalletProps): { wallet: Wallet; openingEntry: WalletLedgerEntry | null } {
     const { initialBalance, at } = props;
+
     if (initialBalance.isNegative()) {
       throw new InvalidWalletOpeningError('initial balance must not be negative');
     }
@@ -55,7 +32,10 @@ export class Wallet {
       new Date(at),
       new Date(at),
     );
-    if (initialBalance.isZero()) return { wallet, openingEntry: null };
+
+    if (initialBalance.isZero()) {
+      return { wallet, openingEntry: null };
+    }
     if (!props.opening) {
       throw new InvalidWalletOpeningError(
         'a positive initial balance requires an opening transaction',
@@ -72,6 +52,7 @@ export class Wallet {
       walletVersion: 1,
       createdAt: at,
     });
+
     return { wallet, openingEntry };
   }
 
@@ -101,18 +82,24 @@ export class Wallet {
 
   canDebit(money: Money): boolean {
     this.assertSameCurrency(money);
+
     return !this._balance.subtract(money).isNegative();
   }
 
   debit(movement: BalanceMovement): WalletLedgerEntry {
     this.assertSameCurrency(movement.money);
     const after = this._balance.subtract(movement.money);
-    if (after.isNegative()) throw new InsufficientBalanceError(this.id);
+
+    if (after.isNegative()) {
+      throw new InsufficientBalanceError(this.id);
+    }
+
     return this.apply(LedgerDirection.Debit, movement, after);
   }
 
   credit(movement: BalanceMovement): WalletLedgerEntry {
     this.assertSameCurrency(movement.money);
+
     return this.apply(LedgerDirection.Credit, movement, this._balance.add(movement.money));
   }
 
@@ -144,14 +131,17 @@ export class Wallet {
       walletVersion: this._version + 1,
       createdAt: movement.at,
     });
+
     this._balance = after;
     this._version += 1;
     this._updatedAt = new Date(movement.at);
+
     return entry;
   }
 
   private assertSameCurrency(money: Money): void {
-    if (money.currency !== this.currency)
+    if (money.currency !== this.currency) {
       throw new CurrencyMismatchError(this.currency, money.currency);
+    }
   }
 }
